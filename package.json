@@ -1,0 +1,10 @@
+{
+  "name": "creature-corner",
+  "version": "1.0.0",
+  "description": "Creature Corner - Handmade creatures, masks, and sci-fi art",
+  "private": true,
+  "scripts": {
+    "start": "npx serve .",
+    "preview": "npx serve . -p 3000"
+  }
+}

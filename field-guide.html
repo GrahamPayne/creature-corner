@@ -57,7 +57,7 @@
                             <span class="specimen-id">CC-000</span>
                             <span class="specimen-category">Specimen Archive</span>
                         </div>
-                        <h2 class="specimen-name">Prototype Specimen</h2>
+                        <h2 class="specimen-name">Sci-Fi Hermit Crab</h2>
                         <span class="specimen-badge in-development">In Development</span>
                     </header>
 
@@ -87,20 +87,21 @@
                         -->
                         <model-viewer
                             id="specimen-viewer"
-                            src="assets/models/placeholder-specimen.glb"
-                            alt="3D scan of Prototype Specimen"
+                            src="assets/models/crab-specimen.glb"
+                            alt="3D scan of Hermit Crab Specimen"
                             camera-controls
                             touch-action="pan-y"
                             auto-rotate
-                            auto-rotate-delay="2000"
-                            rotation-per-second="30deg"
-                            shadow-intensity="1"
-                            shadow-softness="0.8"
-                            exposure="1"
+                            auto-rotate-delay="1500"
+                            rotation-per-second="20deg"
+                            shadow-intensity="0.6"
+                            shadow-softness="0.5"
+                            exposure="0.75"
                             environment-image="neutral"
-                            camera-orbit="45deg 75deg 2.5m"
-                            min-camera-orbit="auto auto 1m"
-                            max-camera-orbit="auto auto 5m"
+                            camera-orbit="30deg 70deg auto"
+                            min-camera-orbit="auto auto auto"
+                            max-camera-orbit="auto auto auto"
+                            field-of-view="30deg"
                             interaction-prompt="auto"
                         >
                             <!-- Fallback content shown when model fails to load -->

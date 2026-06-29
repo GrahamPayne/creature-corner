@@ -23,3 +23,12 @@ Thumbs.db
 # Build output
 dist/
 build/
+
+# Cloudflare Wrangler (local cache, credentials)
+.wrangler/
+
+# Build scripts (not needed in production)
+scripts/
+
+# Package lock
+package-lock.json

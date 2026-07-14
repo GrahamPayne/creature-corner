@@ -756,10 +756,16 @@ a:hover {
     padding: 100px 24px 80px;
 }
 
+/* Exhibition Hero (header + poster share one centered width) */
+.exhibition-hero {
+    max-width: 480px;
+    margin: 0 auto 60px;
+}
+
 /* Exhibition Header */
 .exhibition-header {
     text-align: center;
-    margin-bottom: 60px;
+    margin-bottom: 32px;
 }
 
 .exhibition-label {
@@ -771,23 +777,25 @@ a:hover {
     margin-bottom: 16px;
 }
 
-.exhibition-header h2 {
-    font-size: 2.5rem;
-    font-weight: 300;
-    letter-spacing: 0.15em;
+.exhibition-header h1 {
+    font-size: 3.5rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
-    margin-bottom: 16px;
+    line-height: 1.05;
+    margin-bottom: 20px;
 }
 
 .exhibition-venue {
-    font-size: 1rem;
-    color: var(--text-secondary);
-    letter-spacing: 0.05em;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 0.04em;
 }
 
 /* Featured Image */
 .exhibition-featured {
-    margin-bottom: 60px;
+    margin-bottom: 0;
 }
 
 .exhibition-image-placeholder {
@@ -810,7 +818,8 @@ a:hover {
 
 /* Exhibition Body */
 .exhibition-body {
-    margin-bottom: 60px;
+    max-width: 640px;
+    margin: 0 auto 60px;
 }
 
 .exhibition-intro {
@@ -1358,8 +1367,8 @@ a:hover {
         padding: 70px 20px 60px;
     }
 
-    .exhibition-header h2 {
-        font-size: 1.8rem;
+    .exhibition-header h1 {
+        font-size: 2.25rem;
     }
 
     .exhibition-list {

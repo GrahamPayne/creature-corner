@@ -99,7 +99,7 @@
             <div class="commission-form-section">
                 <h2>Start an Inquiry</h2>
 
-                <form id="commission-form" class="commission-form" novalidate>
+                <form id="commission-form" class="commission-form">
                     <div class="form-row">
                         <div class="form-group">
                             <label for="cf-name">Name</label>
@@ -132,10 +132,11 @@
                         <input type="text" id="cf-references" name="references" placeholder="Links to reference images, Pinterest boards, etc.">
                     </div>
 
-                    <!-- Honeypot field: hidden from real visitors, catches simple bots -->
+                    <!-- Honeypot field: hidden from real visitors, catches simple bots. Formspree also
+                         recognizes the "_gotcha" name and will silently discard matching submissions. -->
                     <div class="form-group hp-field" aria-hidden="true">
                         <label for="cf-company">Company</label>
-                        <input type="text" id="cf-company" name="company" tabindex="-1" autocomplete="off">
+                        <input type="text" id="cf-company" name="_gotcha" tabindex="-1" autocomplete="off">
                     </div>
 
                     <div class="form-checkbox-group">
@@ -146,7 +147,7 @@
                     <button type="submit" class="btn btn-primary commission-submit">Submit Inquiry</button>
 
                     <p class="form-message form-message-success" role="status" hidden>Thank you &mdash; your inquiry has been sent. I'll follow up by email as soon as I can.</p>
-                    <p class="form-message form-message-error" role="alert" hidden>Something went wrong sending your inquiry. Please email <a href="mailto:creaturecornerart@gmail.com">creaturecornerart@gmail.com</a> directly.</p>
+                    <p class="form-message form-message-error" role="alert" hidden>Something went wrong sending your inquiry. Please try again in a moment.</p>
                 </form>
             </div>
 
@@ -182,6 +183,8 @@
         });
 
         (function () {
+            var FORMSPREE_ENDPOINT = 'https://formspree.io/f/mpqvqdpl';
+
             var form = document.getElementById('commission-form');
             var successMsg = form.querySelector('.form-message-success');
             var errorMsg = form.querySelector('.form-message-error');
@@ -193,37 +196,28 @@
                 errorMsg.hidden = true;
 
                 // Honeypot: if this hidden field got filled in, silently drop the submission.
-                if (form.company.value) {
+                if (form._gotcha.value) {
                     form.reset();
                     successMsg.hidden = false;
                     return;
                 }
 
-                var payload = {
-                    name: form.name.value.trim(),
-                    email: form.email.value.trim(),
-                    budget: form.budget.value.trim(),
-                    timeline: form.timeline.value.trim(),
-                    description: form.description.value.trim(),
-                    references: form.references.value.trim(),
-                    agreeTerms: form.agreeTerms.checked,
-                    company: ''
-                };
+                var formData = new FormData(form);
+                formData.set('_replyto', form.email.value.trim());
+                formData.set('_subject', 'New Creature Corner Commission Inquiry');
 
                 var originalLabel = submitBtn.textContent;
                 submitBtn.disabled = true;
                 submitBtn.textContent = 'Sending...';
 
                 try {
-                    var res = await fetch('/api/commission-inquiry', {
+                    var res = await fetch(FORMSPREE_ENDPOINT, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
+                        headers: { 'Accept': 'application/json' },
+                        body: formData
                     });
-                    var data = {};
-                    try { data = await res.json(); } catch (e) {}
 
-                    if (res.ok && data.ok) {
+                    if (res.ok) {
                         form.reset();
                         successMsg.hidden = false;
                     } else {

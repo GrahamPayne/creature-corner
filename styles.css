@@ -417,6 +417,10 @@ a:hover {
 }
 
 .contact-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
     margin: 40px 0;
 }
 
@@ -482,6 +486,202 @@ a:hover {
 
 .contact-social-link:hover svg {
     color: var(--accent);
+}
+
+/* ---------- COMMISSIONS PAGE ---------- */
+.commissions-page {
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.commissions-intro p {
+    font-size: 1.05rem;
+    line-height: 1.9;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.commissions-divider {
+    width: 60px;
+    height: 1px;
+    background-color: var(--border);
+    margin: 50px auto;
+}
+
+.commissions-process h2,
+.payment-terms h2,
+.commission-form-section h2 {
+    font-size: 1.2rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+    color: var(--text-primary);
+    margin-bottom: 32px;
+}
+
+.process-steps {
+    list-style: none;
+    display: grid;
+    gap: 32px;
+}
+
+.process-step {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--accent);
+    border-radius: 50%;
+    color: var(--accent);
+    font-size: 1.1rem;
+    letter-spacing: 0.05em;
+}
+
+.step-content h3 {
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.step-content p {
+    font-size: 0.98rem;
+    line-height: 1.8;
+    color: var(--text-secondary);
+}
+
+/* Payment terms callout */
+.payment-terms {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    padding: 32px;
+}
+
+.payment-terms p {
+    font-size: 1rem;
+    line-height: 1.8;
+    color: var(--text-primary);
+    text-align: center;
+}
+
+/* Inquiry form */
+.commission-form {
+    display: grid;
+    gap: 24px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.form-group {
+    display: grid;
+    gap: 8px;
+}
+
+.form-group label {
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.form-group input,
+.form-group textarea {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 14px 16px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 140px;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 8px rgba(255, 45, 149, 0.25);
+}
+
+/* Honeypot field: visually hidden but still reachable by simple bots */
+.hp-field {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+.form-checkbox-group {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: start;
+}
+
+.form-checkbox-group input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-top: 3px;
+    accent-color: var(--accent);
+}
+
+.form-checkbox-group label {
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: var(--text-secondary);
+}
+
+.commission-submit {
+    justify-self: center;
+    min-width: 220px;
+}
+
+.commission-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.form-message {
+    padding: 16px 20px;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    border: 1px solid;
+    text-align: center;
+}
+
+.form-message-success {
+    color: var(--accent-secondary);
+    border-color: var(--accent-secondary);
+    background-color: rgba(57, 255, 20, 0.08);
+}
+
+.form-message-error {
+    color: var(--accent);
+    border-color: var(--accent);
+    background-color: rgba(255, 45, 149, 0.08);
+}
+
+.form-message-error a {
+    color: inherit;
+    text-decoration: underline;
 }
 
 /* ---------- GALLERY SECTION ---------- */
@@ -1452,6 +1652,30 @@ a:hover {
 
     .contact-social-link {
         padding: 24px 20px;
+    }
+
+    /* Commissions page mobile */
+    .process-step {
+        grid-template-columns: 40px 1fr;
+        gap: 14px;
+    }
+
+    .step-number {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .payment-terms {
+        padding: 24px 20px;
+    }
+
+    .commission-submit {
+        width: 100%;
     }
 }
 

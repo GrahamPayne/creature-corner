@@ -1,0 +1,340 @@
+{
+  "canvas": {
+    "width": 1086,
+    "height": 1448
+  },
+  "layers": [
+    {
+      "name": "Layer 1",
+      "slug": "layer-1",
+      "exportKind": "included-in-base-only",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 0,
+        "top": 0,
+        "right": 1086,
+        "bottom": 1448
+      },
+      "normalizedBounds": {
+        "left": 0,
+        "top": 0,
+        "width": 1,
+        "height": 1
+      }
+    },
+    {
+      "name": "Terminal body",
+      "slug": "terminal-body",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 162,
+        "top": 713,
+        "right": 779,
+        "bottom": 1314
+      },
+      "normalizedBounds": {
+        "left": 0.14917,
+        "top": 0.4924,
+        "width": 0.56814,
+        "height": 0.41506
+      }
+    },
+    {
+      "name": "terminal Screen",
+      "slug": "terminal-screen",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 291,
+        "top": 891,
+        "right": 743,
+        "bottom": 1115
+      },
+      "normalizedBounds": {
+        "left": 0.26796,
+        "top": 0.61533,
+        "width": 0.41621,
+        "height": 0.1547
+      }
+    },
+    {
+      "name": "JOG_WHEEL",
+      "slug": "jog-wheel",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 754,
+        "top": 421,
+        "right": 1044,
+        "bottom": 697
+      },
+      "normalizedBounds": {
+        "left": 0.69429,
+        "top": 0.29075,
+        "width": 0.26703,
+        "height": 0.19061
+      }
+    },
+    {
+      "name": "Main Body",
+      "slug": "main-body",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 167,
+        "top": 57,
+        "right": 947,
+        "bottom": 723
+      },
+      "normalizedBounds": {
+        "left": 0.15378,
+        "top": 0.03936,
+        "width": 0.71823,
+        "height": 0.45994
+      }
+    },
+    {
+      "name": "Main Screen",
+      "slug": "main-screen",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 356,
+        "top": 283,
+        "right": 743,
+        "bottom": 578
+      },
+      "normalizedBounds": {
+        "left": 0.32781,
+        "top": 0.19544,
+        "width": 0.35635,
+        "height": 0.20373
+      }
+    },
+    {
+      "name": "DEVICE ON/OFF button_pressed",
+      "slug": "device-on-off-button-pressed",
+      "exportKind": "sprite",
+      "hasEffects": true,
+      "pixelBounds": {
+        "left": 218,
+        "top": 530,
+        "right": 297,
+        "bottom": 601
+      },
+      "normalizedBounds": {
+        "left": 0.20074,
+        "top": 0.36602,
+        "width": 0.07274,
+        "height": 0.04903
+      }
+    },
+    {
+      "name": "SIDEBUTTON_1",
+      "slug": "sidebutton-1",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 829,
+        "top": 272,
+        "right": 871,
+        "bottom": 312
+      },
+      "normalizedBounds": {
+        "left": 0.76335,
+        "top": 0.18785,
+        "width": 0.03867,
+        "height": 0.02762
+      }
+    },
+    {
+      "name": "SIDEBUTTON_2",
+      "slug": "sidebutton-2",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 834,
+        "top": 339,
+        "right": 876,
+        "bottom": 379
+      },
+      "normalizedBounds": {
+        "left": 0.76796,
+        "top": 0.23412,
+        "width": 0.03867,
+        "height": 0.02762
+      }
+    },
+    {
+      "name": "DEVICE ON/OFF button_pressed",
+      "slug": "device-on-off-button-pressed-2",
+      "exportKind": "sprite",
+      "hasEffects": true,
+      "pixelBounds": {
+        "left": 218,
+        "top": 530,
+        "right": 297,
+        "bottom": 601
+      },
+      "normalizedBounds": {
+        "left": 0.20074,
+        "top": 0.36602,
+        "width": 0.07274,
+        "height": 0.04903
+      }
+    },
+    {
+      "name": "BUTTON_01",
+      "slug": "button-01",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 393,
+        "top": 259,
+        "right": 452,
+        "bottom": 275
+      },
+      "normalizedBounds": {
+        "left": 0.36188,
+        "top": 0.17887,
+        "width": 0.05433,
+        "height": 0.01105
+      }
+    },
+    {
+      "name": "BUTTON_02",
+      "slug": "button-02",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 478,
+        "top": 258,
+        "right": 537,
+        "bottom": 274
+      },
+      "normalizedBounds": {
+        "left": 0.44015,
+        "top": 0.17818,
+        "width": 0.05433,
+        "height": 0.01105
+      }
+    },
+    {
+      "name": "BUTTON_03",
+      "slug": "button-03",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 567,
+        "top": 259,
+        "right": 626,
+        "bottom": 275
+      },
+      "normalizedBounds": {
+        "left": 0.5221,
+        "top": 0.17887,
+        "width": 0.05433,
+        "height": 0.01105
+      }
+    },
+    {
+      "name": "BUTTON_04",
+      "slug": "button-04",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 652,
+        "top": 259,
+        "right": 711,
+        "bottom": 275
+      },
+      "normalizedBounds": {
+        "left": 0.60037,
+        "top": 0.17887,
+        "width": 0.05433,
+        "height": 0.01105
+      }
+    },
+    {
+      "name": "POWERLIGHT_OFF",
+      "slug": "powerlight-off",
+      "exportKind": "sprite",
+      "hasEffects": false,
+      "pixelBounds": {
+        "left": 216,
+        "top": 202,
+        "right": 253,
+        "bottom": 239
+      },
+      "normalizedBounds": {
+        "left": 0.1989,
+        "top": 0.1395,
+        "width": 0.03407,
+        "height": 0.02555
+      }
+    },
+    {
+      "name": "POWERLIGHT_on",
+      "slug": "powerlight-on",
+      "exportKind": "sprite",
+      "hasEffects": true,
+      "pixelBounds": {
+        "left": 216,
+        "top": 202,
+        "right": 253,
+        "bottom": 239
+      },
+      "normalizedBounds": {
+        "left": 0.1989,
+        "top": 0.1395,
+        "width": 0.03407,
+        "height": 0.02555
+      }
+    }
+  ],
+  "overlayCrops": {
+    "powerlight-on.png": {
+      "pixelBounds": {
+        "left": 192,
+        "top": 178,
+        "right": 277,
+        "bottom": 263
+      },
+      "normalizedBounds": {
+        "left": 0.1768,
+        "top": 0.12293,
+        "width": 0.07827,
+        "height": 0.0587
+      }
+    },
+    "power-button-pressed.png": {
+      "pixelBounds": {
+        "left": 194,
+        "top": 506,
+        "right": 321,
+        "bottom": 625
+      },
+      "normalizedBounds": {
+        "left": 0.17864,
+        "top": 0.34945,
+        "width": 0.11694,
+        "height": 0.08218
+      }
+    }
+  },
+  "backgroundSample": {
+    "topLeft": [
+      0,
+      0,
+      0,
+      255
+    ],
+    "center": [
+      0,
+      0,
+      0,
+      255
+    ]
+  }
+}

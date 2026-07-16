@@ -24,6 +24,10 @@ Thumbs.db
 dist/
 build/
 
+# Playwright
+test-results/
+playwright-report/
+
 # Cloudflare Wrangler (local cache, credentials)
 .wrangler/
 

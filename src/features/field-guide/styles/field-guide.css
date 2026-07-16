@@ -1,0 +1,336 @@
+/* ============================================
+   FIELD GUIDE PROTOTYPE — device styles
+   Artwork by Graham Payne; geometry from the mockup PSD
+   (see docs/PSD_LAYER_MANIFEST.md).
+   ============================================ */
+
+/* ---------- stage ---------- */
+.fg-stage {
+    display: flex;
+    justify-content: center;
+    padding: 8px 12px 48px;
+}
+
+.fg-device {
+    position: relative;
+    /* PSD canvas is 1086 x 1448 (ratio 0.75) — keep it exact */
+    aspect-ratio: 1086 / 1448;
+    width: min(640px, 94vw, calc(88vh * 0.75));
+    container-type: inline-size;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.fg-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------- artwork layers ---------- */
+.fg-layer {
+    position: absolute;
+    display: block;
+}
+
+img.fg-layer,
+.fg-jog-img {
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.fg-jog-wrap {
+    /* wrapper so the wheel rotates around its own center */
+}
+
+.fg-jog-img {
+    position: absolute;
+    inset: 0;
+    transition: transform 0.15s ease-out;
+    will-change: transform;
+}
+
+.fg-layer.is-pressed {
+    filter: brightness(1.4);
+    transform: translateY(1.5%);
+}
+
+/* state overlays (composite crops, PSD glow included) */
+.fg-overlay {
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+
+.fg-overlay.is-visible {
+    opacity: 1;
+}
+
+/* subtle "nothing happens" response while powered off */
+@keyframes fg-dead-press {
+    0% { filter: brightness(1); }
+    35% { filter: brightness(0.92); }
+    100% { filter: brightness(1); }
+}
+
+.fg-device.fg-dead-press {
+    animation: fg-dead-press 0.18s ease;
+}
+
+/* ---------- hotspots ---------- */
+.fg-hotspot {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 18%;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.fg-hotspot-power,
+.fg-hotspot-side1,
+.fg-hotspot-side2 {
+    border-radius: 50%;
+}
+
+.fg-hotspot:focus-visible {
+    outline: 2px solid var(--accent-tertiary, #00e5cc);
+    outline-offset: 2px;
+}
+
+.fg-hotspot:active {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.fg-hotspot-jog {
+    cursor: grab;
+    border-radius: 50%;
+}
+
+.fg-hotspot-jog.is-dragging {
+    cursor: grabbing;
+}
+
+/* ---------- screens (shared) ---------- */
+.fg-screen {
+    font-family: var(--catalog-font, 'Courier New', Consolas, monospace);
+    color: #c8e64e;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    text-transform: uppercase;
+}
+
+/* screens visible in every powered state except full off */
+.fg-device:not([data-state='poweredOff']) .fg-screen {
+    opacity: 1;
+}
+
+/* faint phosphor glow + scanlines, kept subtle */
+.fg-device:not([data-state='poweredOff']) .fg-screen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(ellipse at center, rgba(200, 230, 78, 0.06), transparent 75%),
+        repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 3px);
+}
+
+@keyframes fg-flicker {
+    0% { opacity: 0; }
+    18% { opacity: 0.9; }
+    28% { opacity: 0.15; }
+    45% { opacity: 0.85; }
+    60% { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+.fg-screen.fg-flicker {
+    animation: fg-flicker 0.55s steps(8, end);
+}
+
+/* ---------- main (upper) screen ---------- */
+.fg-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1cqw;
+    padding: 1.6cqw 2.4cqw;
+    font-size: 2cqw;
+    line-height: 1.35;
+    letter-spacing: 0.05em;
+}
+
+.fg-main-title {
+    font-size: 2.5cqw;
+    letter-spacing: 0.12em;
+    color: #dff27a;
+    white-space: nowrap;
+}
+
+.fg-main-sub {
+    font-size: 1.7cqw;
+    color: #93b23a;
+    letter-spacing: 0.14em;
+}
+
+.fg-main[data-state='booting'] .fg-main-sub {
+    animation: fg-blink 0.9s steps(2, start) infinite;
+}
+
+.fg-main-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7cqw;
+    white-space: pre;
+    overflow-y: auto;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(200, 230, 78, 0.35) transparent;
+}
+
+.fg-main-item.is-selected {
+    color: #eaff8a;
+    text-shadow: 0 0 6px rgba(200, 230, 78, 0.55);
+}
+
+.fg-main-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5cqw;
+    color: #a9c94f;
+    font-size: 1.8cqw;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(200, 230, 78, 0.35) transparent;
+}
+
+.fg-main-record-title {
+    font-size: 2cqw;
+    white-space: normal;
+}
+
+.fg-main-hint {
+    margin-top: auto;
+    flex-shrink: 0;
+    font-size: 1.4cqw;
+    color: #7d9636;
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+}
+
+/* ---------- terminal (lower) screen ---------- */
+.fg-terminal {
+    display: flex;
+    flex-direction: column;
+    padding: 1.8cqw 2.2cqw;
+    font-size: 2cqw;
+    line-height: 1.5;
+}
+
+.fg-term-history {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(200, 230, 78, 0.35) transparent;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.fg-term-line {
+    color: #c8e64e;
+}
+
+.fg-term-echo {
+    color: #86a13c;
+}
+
+.fg-term-form {
+    display: flex;
+    align-items: center;
+    gap: 1cqw;
+    border-top: 1px solid rgba(200, 230, 78, 0.25);
+    padding-top: 0.8cqw;
+}
+
+.fg-term-prompt {
+    color: #dff27a;
+}
+
+.fg-term-input {
+    flex: 1;
+    background: transparent;
+    border: 0;
+    outline: none;
+    color: #eaff8a;
+    font: inherit;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    caret-color: #eaff8a;
+}
+
+.fg-term-input:focus-visible {
+    outline: none; /* the blinking caret + cursor block below signal focus */
+}
+
+.fg-term-form::after {
+    content: '▌';
+    color: #c8e64e;
+    animation: fg-blink 1.05s steps(2, start) infinite;
+}
+
+.fg-terminal-off .fg-term-form {
+    visibility: hidden;
+}
+
+@keyframes fg-blink {
+    to { visibility: hidden; }
+}
+
+/* ---------- mobile terminal zoom ---------- */
+@media (max-width: 700px) {
+    /* !important needed: the layout engine positions the terminal with
+       inline styles (normalized PSD coordinates), which must lose while
+       the temporary typing overlay is active. */
+    html.fg-terminal-zoom .fg-screen-terminal {
+        position: fixed;
+        left: 4vw !important;
+        right: 4vw !important;
+        top: 6vh !important;
+        width: auto !important;
+        height: 34vh !important;
+        z-index: 60;
+        background: #131a05;
+        border: 1px solid rgba(200, 230, 78, 0.5);
+        border-radius: 8px;
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.8);
+        font-size: 16px; /* stops iOS auto-zoom and stays readable */
+    }
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+    .fg-screen.fg-flicker,
+    .fg-device.fg-dead-press,
+    .fg-main[data-state='booting'] .fg-main-sub,
+    .fg-term-form::after {
+        animation: none;
+    }
+
+    .fg-jog-img,
+    .fg-overlay,
+    .fg-screen {
+        transition: none;
+    }
+}

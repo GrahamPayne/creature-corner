@@ -1,0 +1,4 @@
+{
+  "type": "module",
+  "//": "Marks the Field Guide feature as ES modules so Node (unit tests, typecheck) treats these files the same way the browser does. Not a separate npm package."
+}

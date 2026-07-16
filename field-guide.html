@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Field Guide - Creature Corner</title>
-    <meta name="description" content="Creature Corner Field Guide - Documented specimens with 3D scans, lore, and archive data.">
+    <meta name="description" content="The Creature Corner Field Guide - an interactive device for recording and preserving anomalous material. Prototype interface.">
     <link rel="stylesheet" href="styles.css">
-    <!-- Google model-viewer for 3D specimens -->
-    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <link rel="stylesheet" href="src/features/field-guide/styles/field-guide.css">
 </head>
 <body class="page-field-guide">
 
@@ -35,124 +34,33 @@
 
     <!-- Page Content -->
     <main class="page-content">
-        <header class="page-header">
-            <h1>Field Guide</h1>
-            <p>Documented specimens from the archive. Each entry includes 3D scans, reference data, and field notes.</p>
-        </header>
 
-        <section class="field-guide">
-            <div class="container">
+        <section class="fg-stage">
+            <p id="fg-device-description" class="fg-visually-hidden">
+                The Field Guide is an illustrated handheld device with two screens.
+                The upper screen shows record categories and record details. The lower
+                screen is a typed terminal: click it and type commands such as HELP,
+                CREATURES, OPEN followed by a record ID, BACK, HOME, or POWER OFF.
+                Illustrated controls around the screens do the same things: a power
+                button at the lower left of the upper body, four orange category and
+                menu buttons above the upper screen, two round side buttons for
+                previous and next, and a jog wheel on the right edge for scrolling
+                through records. The device starts powered off; press the power
+                button to begin.
+            </p>
 
-                <!-- Archive status -->
-                <div class="field-guide-intro">
-                    <span class="archive-status">SPECIMEN ARCHIVE // IN DEVELOPMENT</span>
-                </div>
-
-                <!-- Prototype Specimen Entry -->
-                <article class="specimen-entry">
-
-                    <!-- Specimen Header -->
-                    <header class="specimen-header">
-                        <div class="specimen-meta">
-                            <span class="specimen-id">CC-000</span>
-                            <span class="specimen-category">Specimen Archive</span>
-                        </div>
-                        <h2 class="specimen-name">Sci-Fi Hermit Crab</h2>
-                        <span class="specimen-badge in-development">In Development</span>
-                    </header>
-
-                    <!-- 3D Model Viewer -->
-                    <div class="model-viewer-container">
-                        <!--
-                            ===========================================
-                            3D MODEL VIEWER
-                            ===========================================
-                            Replace the placeholder path below with your actual .glb file:
-
-                            Example:
-                            src="assets/models/specimen-001.glb"
-
-                            Supported formats: .glb, .gltf
-
-                            To create .glb files from your sculptures:
-                            - Export from Blender, ZBrush, or other 3D software
-                            - Use photogrammetry scanning apps
-                            - Optimize mesh for web (under 10MB recommended)
-
-                            The model-viewer component handles:
-                            - Auto-rotation
-                            - Touch/mouse interaction
-                            - AR viewing on supported devices
-                            ===========================================
-                        -->
-                        <model-viewer
-                            id="specimen-viewer"
-                            src="assets/models/crab-specimen.glb"
-                            alt="3D scan of Hermit Crab Specimen"
-                            camera-controls
-                            touch-action="pan-y"
-                            auto-rotate
-                            auto-rotate-delay="1500"
-                            rotation-per-second="20deg"
-                            shadow-intensity="0.6"
-                            shadow-softness="0.5"
-                            exposure="0.75"
-                            environment-image="neutral"
-                            camera-orbit="30deg 70deg auto"
-                            min-camera-orbit="auto auto auto"
-                            max-camera-orbit="auto auto auto"
-                            field-of-view="30deg"
-                            interaction-prompt="auto"
-                        >
-                            <!-- Fallback content shown when model fails to load -->
-                            <div class="model-fallback" slot="poster">
-                                <div class="fallback-content">
-                                    <span class="fallback-icon">&#9651;</span>
-                                    <p>3D specimen scan coming soon.</p>
-                                </div>
-                            </div>
-                        </model-viewer>
-                        <p class="viewer-hint">Drag to rotate. Scroll to zoom.</p>
-                    </div>
-
-                    <!-- Specimen Data -->
-                    <div class="specimen-data">
-
-                        <div class="data-section">
-                            <h3>Notes</h3>
-                            <p class="data-placeholder">Field notes, lore, and background information will be documented here as specimens are completed.</p>
-                        </div>
-
-                        <div class="data-grid">
-                            <div class="data-item">
-                                <span class="data-label">Materials</span>
-                                <span class="data-value">—</span>
-                            </div>
-                            <div class="data-item">
-                                <span class="data-label">Dimensions</span>
-                                <span class="data-value">—</span>
-                            </div>
-                            <div class="data-item">
-                                <span class="data-label">Status</span>
-                                <span class="data-value">In Development</span>
-                            </div>
-                            <div class="data-item">
-                                <span class="data-label">Classification</span>
-                                <span class="data-value">—</span>
-                            </div>
-                        </div>
-
-                    </div>
-
-                </article>
-
-                <!-- Future entries note -->
-                <div class="field-guide-footer">
-                    <p>Additional specimens will be documented as work is completed.</p>
-                </div>
-
+            <div id="field-guide-device"
+                 role="group"
+                 aria-label="Creature Corner Field Guide device"
+                 aria-describedby="fg-device-description">
+                <noscript>
+                    <p style="color: var(--text-secondary); text-align: center; padding: 40px 16px;">
+                        The Field Guide device needs JavaScript to operate.
+                    </p>
+                </noscript>
             </div>
         </section>
+
     </main>
 
     <!-- Footer -->
@@ -184,6 +92,7 @@
             this.classList.toggle('active');
         });
     </script>
+    <script type="module" src="src/features/field-guide/main.js"></script>
 
 </body>
 </html>

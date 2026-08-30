@@ -206,6 +206,12 @@ a:hover {
     color: var(--accent);
 }
 
+/* Feature flag: Field Guide is unfinished, hide its nav link from visitors.
+   To re-enable, delete this rule (leave the .nav-link-hidden class in the HTML alone). */
+.nav-link-hidden {
+    display: none;
+}
+
 .nav-toggle {
     display: none;
     flex-direction: column;

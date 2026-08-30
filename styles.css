@@ -297,6 +297,19 @@ a:hover {
     letter-spacing: 0.02em;
 }
 
+/* Home page exhibition poster */
+.home-poster {
+    max-width: 420px;
+    width: 100%;
+    margin: 0 auto 60px;
+}
+
+.home-poster img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
 /* Home page social icons */
 .hero-social {
     display: flex;
@@ -1503,6 +1516,11 @@ a:hover {
     .hero-tagline {
         font-size: 1rem;
         margin-bottom: 50px;
+    }
+
+    .home-poster {
+        max-width: 280px;
+        margin-bottom: 40px;
     }
 
     .hero-buttons {

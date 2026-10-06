@@ -9,5 +9,5 @@
     "strict": false,
     "skipLibCheck": true
   },
-  "include": ["src/features/field-guide/**/*.js"]
+  "include": ["src/features/field-guide/**/*.js", "src/features/shop/**/*.js"]
 }

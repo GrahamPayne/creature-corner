@@ -1,0 +1,6 @@
+# Cloudflare Pages routing for the shop's dynamic product URLs.
+# The product slug is passed through as a query param rather than parsed
+# from the path, so product.html only ever has one way to read it.
+# Not understood by `npx serve` locally — use /product?slug=... directly
+# when testing locally (see docs/SHOP_SETUP.md).
+/product/:slug  /product.html?slug=:slug  200

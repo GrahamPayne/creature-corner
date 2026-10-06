@@ -1,0 +1,96 @@
+/* ============================================
+   SHOP — scoped additions on top of the site's shared styles.css.
+   Reuses existing variables and the specimen-card / specimen-entry /
+   data-grid patterns already defined there; only adds what's genuinely new
+   (price, product image gallery, buy button area).
+   ============================================ */
+
+.specimen-price {
+    font-family: var(--catalog-font);
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    letter-spacing: 0.03em;
+}
+
+.specimen-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.shop-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 60px 0;
+    font-size: 0.95rem;
+}
+
+/* Product detail image gallery (replaces the old 3D model-viewer slot) */
+.product-gallery {
+    margin-bottom: 40px;
+}
+
+.product-gallery-main {
+    aspect-ratio: 4/3;
+}
+
+.product-gallery-main img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.product-gallery-thumbs {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.product-thumb {
+    width: 64px;
+    height: 64px;
+    padding: 0;
+    border: 1px solid var(--border);
+    background: none;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.2s ease;
+}
+
+.product-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.product-thumb.active,
+.product-thumb:hover {
+    border-color: var(--accent);
+}
+
+.product-price {
+    font-family: var(--catalog-font);
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    margin: 16px 0 24px;
+}
+
+.product-actions {
+    margin-top: 32px;
+}
+
+.product-note {
+    margin-top: 12px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+}
+
+@media (max-width: 768px) {
+    .product-gallery-main {
+        aspect-ratio: 1/1;
+    }
+}

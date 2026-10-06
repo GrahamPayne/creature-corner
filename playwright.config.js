@@ -1,10 +1,14 @@
-// Playwright config for the Field Guide prototype e2e tests.
+// Playwright config for e2e tests across the site's feature folders.
 // The site is static; `npx serve` hosts the repo root with clean URLs,
 // so /field-guide resolves to field-guide.html (same as production).
+// Note: `npx serve` does not understand the Cloudflare _redirects file, and
+// it 301-redirects /product.html?... to /product (dropping the query
+// string), so shop tests hit the extensionless /product?slug=... form
+// instead of /product/:slug (see docs/SHOP_SETUP.md).
 const { defineConfig, devices } = require('@playwright/test');
 
 module.exports = defineConfig({
-  testDir: 'tests/field-guide/e2e',
+  testDir: 'tests',
   timeout: 30_000,
   retries: 0,
   reporter: [['list']],

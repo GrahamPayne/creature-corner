@@ -8,7 +8,7 @@
     "preview": "npx serve . -p 3000",
     "fg:extract": "node scripts/extract-field-guide-psd.js",
     "fg:typecheck": "tsc -p jsconfig.json",
-    "test:unit": "node --test \"tests/field-guide/unit/*.test.mjs\"",
+    "test:unit": "node --test \"tests/field-guide/unit/*.test.mjs\" \"tests/shop/unit/*.test.mjs\"",
     "test:e2e": "playwright test",
     "test": "npm run fg:typecheck && npm run test:unit && npm run test:e2e"
   },
@@ -19,6 +19,7 @@
     "heic-convert": "^2.1.0",
     "sharp": "^0.35.2",
     "three": "^0.185.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "wrangler": "^4.0.0"
   }
 }

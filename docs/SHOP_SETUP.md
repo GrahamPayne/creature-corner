@@ -99,6 +99,43 @@ or Supabase dashboard work needed.
 - **Deleting a product** also deletes its Storage files, not just the
   database rows — nothing gets orphaned in Storage.
 
+## Cart, shipping, and checkout review (Stage 6)
+
+No payments yet — this stage makes the whole flow work mechanically:
+Product → Add to Cart → Cart → Shipping/Pickup → Order Summary →
+"Continue to Payment" (currently just shows a placeholder message).
+
+- **Cart persistence:** `localStorage` holds only `{productId, quantity}`
+  pairs, never price/name/image/status. `/cart` re-fetches current data
+  for those ids from Supabase on every load, so a stale or hand-edited
+  localStorage value can never show a wrong price or let someone
+  "buy" something that's sold out since — it can only point at a product
+  id, which always gets re-validated.
+- **Shipping rate:** set per shipping class at **Admin → Shipping
+  Settings**. Rates start unset (`null`) — the cart shows "Not yet
+  configured" and blocks checkout for the Shipping path (Local Pickup is
+  always free) until you set them there. No code or AI needed.
+- **Shipping calculation rule:** flat rate, based on the **largest**
+  shipping class present in the cart (small + medium → medium rate,
+  medium + large → large rate, etc.) — not every item's rate added
+  together. A product with shipping_class `pickup_only` can never be
+  shipped; if your cart mixes a pickup-only item with an item that isn't
+  pickup-eligible, checkout shows a clear conflict message instead of a
+  wrong total.
+
+### Stage 7 must never trust the browser
+
+This is the most important thing to carry into the next stage. Everything
+in the cart and checkout-review UI — subtotal, shipping amount, item
+prices, "is this still in stock" — is for display only. When Stage 7 adds
+Stripe, the server-side function that creates the Checkout Session must
+re-fetch every product fresh from Supabase, re-check its status and
+available quantity, recompute the shipping class and rate itself, and
+compute the final total server-side. It must never accept a price,
+subtotal, or shipping amount sent from the browser as fact. See the
+comment on the "Continue to Payment" handler in
+`src/features/shop/pages/cart.js` for the same note in code.
+
 ## Using the admin panel
 
 Once connected, go to `/admin` and log in with the email/password you

@@ -278,3 +278,18 @@ export async function adminDuplicateProduct(id) {
     status: 'draft',
   });
 }
+
+/** @returns {Promise<{key: string, label: string, flatPriceCents: number|null}[]>} */
+export async function adminListShippingClasses() {
+  const supabase = await client();
+  const { data, error } = await supabase.from('shipping_classes').select('*');
+  if (error) throw error;
+  return data.map((row) => ({ key: row.key, label: row.label, flatPriceCents: row.flat_price_cents }));
+}
+
+/** @param {string} key @param {number} cents */
+export async function adminUpdateShippingRate(key, cents) {
+  const supabase = await client();
+  const { error } = await supabase.from('shipping_classes').update({ flat_price_cents: cents }).eq('key', key);
+  if (error) throw error;
+}

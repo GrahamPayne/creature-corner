@@ -2,6 +2,8 @@ import { getProductBySlug } from '../api/products.js';
 import { formatCents } from '../money.js';
 import { escapeHtml } from '../dom.js';
 import { pickPrimaryImage } from '../primaryImage.js';
+import { addToCart, readCart } from '../cart/cart.js';
+import { syncNavBadge } from '../cart/navBadge.js';
 
 const mount = document.getElementById('product-mount');
 
@@ -91,10 +93,10 @@ function renderProduct(product) {
       </div>
 
       <div class="product-actions">
-        <button type="button" class="btn btn-primary" id="product-buy-btn" disabled>
+        <button type="button" class="btn btn-primary" id="product-buy-btn">
           ${isSold ? 'Sold' : 'Add to Cart'}
         </button>
-        ${isSold ? '' : '<p class="product-note">Cart &amp; checkout are coming in a later update.</p>'}
+        <p class="product-note" id="product-buy-note" hidden></p>
       </div>
     </div>
   `;
@@ -108,9 +110,45 @@ function renderProduct(product) {
       mount.querySelectorAll('.product-thumb').forEach((b) => b.classList.toggle('active', b === btn));
     });
   });
+
+  wireBuyButton(product, isSold);
+}
+
+function wireBuyButton(product, isSold) {
+  const btn = /** @type {HTMLButtonElement} */ (document.getElementById('product-buy-btn'));
+  const note = /** @type {HTMLElement} */ (document.getElementById('product-buy-note'));
+
+  function refresh() {
+    if (isSold) {
+      btn.disabled = true;
+      return;
+    }
+    const inCart = readCart().find((i) => i.productId === product.id)?.quantity ?? 0;
+    if (inCart >= product.quantity) {
+      btn.disabled = true;
+      btn.textContent = 'Max in Cart';
+      note.textContent = `You already have all ${product.quantity} available in your cart.`;
+      note.hidden = false;
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Add to Cart';
+      note.hidden = true;
+    }
+  }
+
+  btn.addEventListener('click', () => {
+    addToCart(product.id, 1, product.quantity);
+    syncNavBadge();
+    refresh();
+    note.innerHTML = 'Added to cart. <a href="/cart">View Cart</a>';
+    note.hidden = false;
+  });
+
+  refresh();
 }
 
 async function init() {
+  syncNavBadge();
   const slug = slugFromUrl();
   if (!slug) {
     renderNotFound();

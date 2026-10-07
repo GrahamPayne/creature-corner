@@ -47,6 +47,54 @@ export async function getProducts({ categorySlug } = {}) {
 }
 
 /**
+ * Used by the cart to re-fetch current product data for whatever ids are
+ * stored in localStorage — never trust a cached price/status from storage.
+ * A product that no longer exists (or RLS no longer shows, e.g. it was
+ * hidden/drafted) simply isn't in the returned array; callers treat a
+ * missing id as "no longer available" exactly like a deleted product.
+ * @param {string[]} ids
+ * @returns {Promise<Product[]>}
+ */
+export async function getProductsByIds(ids) {
+  if (ids.length === 0) return [];
+
+  if (!isSupabaseConfigured()) {
+    return SAMPLE_PRODUCTS.filter((p) => ids.includes(p.id) && PUBLIC_STATUSES.includes(p.status));
+  }
+
+  const supabase = await getSupabaseClient();
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, category:categories(slug, name), images:product_images(storage_path, sort_order, is_primary)')
+    .in('id', ids);
+  if (error) throw error;
+  return data.map((row) => normalizeRow(row, supabase));
+}
+
+/**
+ * Flat shipping rates set by the admin (see admin/api.js's
+ * adminUpdateShippingRate). flatPriceCents is null until configured —
+ * never substitute a guessed number for that.
+ * @returns {Promise<{key: string, label: string, flatPriceCents: number|null}[]>}
+ */
+export async function getShippingClasses() {
+  if (!isSupabaseConfigured()) {
+    return [
+      { key: 'small', label: 'Small', flatPriceCents: null },
+      { key: 'medium', label: 'Medium', flatPriceCents: null },
+      { key: 'large', label: 'Large', flatPriceCents: null },
+      { key: 'oversized', label: 'Oversized', flatPriceCents: null },
+      { key: 'pickup_only', label: 'Local pickup only', flatPriceCents: 0 },
+    ];
+  }
+
+  const supabase = await getSupabaseClient();
+  const { data, error } = await supabase.from('shipping_classes').select('*');
+  if (error) throw error;
+  return data.map((row) => ({ key: row.key, label: row.label, flatPriceCents: row.flat_price_cents }));
+}
+
+/**
  * @param {string} slug
  * @returns {Promise<Product|null>}
  */

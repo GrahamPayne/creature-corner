@@ -3,12 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Field Guide - Creature Corner</title>
-    <meta name="description" content="The Creature Corner Field Guide - an interactive device for recording and preserving anomalous material. Prototype interface.">
+    <title>Cart - Creature Corner</title>
+    <meta name="description" content="Review your cart and choose shipping or local pickup.">
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="src/features/field-guide/styles/field-guide.css">
+    <link rel="stylesheet" href="src/features/shop/styles/shop.css">
+    <link rel="stylesheet" href="src/features/shop/styles/cart.css">
+    <!-- No bundler on this site: maps the bare specifier used in shop JS to
+         a CDN build matching the pinned version in package.json. -->
+    <script type="importmap">
+    { "imports": { "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.117.2" } }
+    </script>
 </head>
-<body class="page-field-guide">
+<body class="page-cart">
 
     <!-- Watermark -->
     <img src="assets/images/watermark.png" alt="" class="site-watermark" aria-hidden="true">
@@ -19,12 +25,12 @@
             <a href="index.html" class="nav-logo">Creature Corner</a>
             <div class="nav-links">
                 <a href="gallery.html">Gallery</a>
-                <a href="field-guide.html" class="active">Field Guide</a>
+                <a href="field-guide.html" class="nav-link-hidden">Field Guide</a>
                 <a href="shop.html">Shop</a>
                 <a href="exhibition.html">Exhibition</a>
                 <a href="about.html">About</a>
                 <a href="contact.html">Contact</a>
-                <a href="cart.html" class="nav-cart-link">Cart <span id="nav-cart-count" class="nav-cart-count"></span></a>
+                <a href="cart.html" class="active nav-cart-link">Cart <span id="nav-cart-count" class="nav-cart-count"></span></a>
             </div>
             <button class="nav-toggle" aria-label="Toggle menu">
                 <span></span>
@@ -36,33 +42,13 @@
 
     <!-- Page Content -->
     <main class="page-content">
+        <header class="page-header">
+            <h1>Cart</h1>
+        </header>
 
-        <section class="fg-stage">
-            <p id="fg-device-description" class="fg-visually-hidden">
-                The Field Guide is an illustrated handheld device with two screens.
-                The upper screen shows record categories and record details. The lower
-                screen is a typed terminal: click it and type commands such as HELP,
-                CREATURES, OPEN followed by a record ID, BACK, HOME, or POWER OFF.
-                Illustrated controls around the screens do the same things: a power
-                button at the lower left of the upper body, four orange category and
-                menu buttons above the upper screen, two round side buttons for
-                previous and next, and a jog wheel on the right edge for scrolling
-                through records. The device starts powered off; press the power
-                button to begin.
-            </p>
-
-            <div id="field-guide-device"
-                 role="group"
-                 aria-label="Creature Corner Field Guide device"
-                 aria-describedby="fg-device-description">
-                <noscript>
-                    <p style="color: var(--text-secondary); text-align: center; padding: 40px 16px;">
-                        The Field Guide device needs JavaScript to operate.
-                    </p>
-                </noscript>
-            </div>
-        </section>
-
+        <div class="container cart-container">
+            <div id="cart-mount"></div>
+        </div>
     </main>
 
     <!-- Footer -->
@@ -93,8 +79,6 @@
             document.querySelector('.nav-links').classList.toggle('active');
             this.classList.toggle('active');
         });
-    </script>
-    <script>
         // Cart count badge: safe to render immediately, before any module
         // JS loads, since it only reads localStorage.
         (function () {
@@ -106,7 +90,7 @@
             } catch (e) {}
         })();
     </script>
-    <script type="module" src="src/features/field-guide/main.js"></script>
+    <script type="module" src="src/features/shop/pages/cart.js"></script>
 
 </body>
 </html>

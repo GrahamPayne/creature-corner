@@ -7,9 +7,12 @@ import {
   adminUpdateProduct,
   adminDeleteProduct,
   adminDuplicateProduct,
+  adminListShippingClasses,
+  adminUpdateShippingRate,
 } from '../admin/api.js';
 import { createProductForm } from '../admin/productForm.js';
 import { createProductTable } from '../admin/productTable.js';
+import { createShippingForm } from '../admin/shippingForm.js';
 import { escapeHtml } from '../dom.js';
 
 const root = document.getElementById('admin-root');
@@ -94,6 +97,7 @@ async function renderDashboard() {
         <h1>Products</h1>
         <div class="admin-header-actions">
           <button type="button" class="admin-btn admin-btn-primary" id="add-product-btn">Add Product</button>
+          <button type="button" class="admin-btn" id="shipping-settings-btn">Shipping Settings</button>
           <button type="button" class="admin-btn" id="signout-btn">Sign Out</button>
         </div>
       </div>
@@ -187,7 +191,33 @@ async function renderDashboard() {
     );
   }
 
+  async function showShippingSettings() {
+    root.querySelector('.admin-panel').innerHTML = `
+      <h1>Shipping Settings</h1>
+      <div id="shipping-form-mount"></div>
+    `;
+    const mount = document.getElementById('shipping-form-mount');
+    let classes;
+    try {
+      classes = await adminListShippingClasses();
+    } catch (err) {
+      console.error('Failed to load shipping classes', err);
+      mount.innerHTML = '<p class="admin-notice admin-notice-error">Could not load shipping settings. Please try again.</p>';
+      return;
+    }
+    mount.appendChild(
+      createShippingForm({
+        classes,
+        onBack: () => renderDashboard(),
+        onSave: async (rates) => {
+          await Promise.all(Object.entries(rates).map(([key, cents]) => adminUpdateShippingRate(key, cents)));
+        },
+      })
+    );
+  }
+
   document.getElementById('add-product-btn').addEventListener('click', () => showForm(categories));
+  document.getElementById('shipping-settings-btn').addEventListener('click', () => showShippingSettings());
 
   refreshTable();
 }

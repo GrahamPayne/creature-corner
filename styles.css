@@ -372,6 +372,13 @@ a:hover {
     color: var(--accent);
 }
 
+/* Cart nav link + item-count badge */
+.nav-cart-count {
+    font-family: var(--catalog-font);
+    font-size: 0.8em;
+    color: var(--accent);
+}
+
 /* ---------- ABOUT PAGE ---------- */
 .about-content {
     max-width: 800px;

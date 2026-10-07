@@ -23,6 +23,7 @@
                 <a href="exhibition.html">Exhibition</a>
                 <a href="about.html">About</a>
                 <a href="contact.html" class="active">Contact</a>
+                <a href="cart.html" class="nav-cart-link">Cart <span id="nav-cart-count" class="nav-cart-count"></span></a>
             </div>
             <button class="nav-toggle" aria-label="Toggle menu">
                 <span></span>
@@ -123,6 +124,18 @@
             document.querySelector('.nav-links').classList.toggle('active');
             this.classList.toggle('active');
         });
+    </script>
+    <script>
+        // Cart count badge: safe to render immediately, before any module
+        // JS loads, since it only reads localStorage.
+        (function () {
+            try {
+                var cart = JSON.parse(localStorage.getItem('cc-cart') || '[]');
+                var count = Array.isArray(cart) ? cart.reduce(function (sum, i) { return sum + (Number(i && i.quantity) || 0); }, 0) : 0;
+                var el = document.getElementById('nav-cart-count');
+                if (el && count > 0) el.textContent = '(' + count + ')';
+            } catch (e) {}
+        })();
     </script>
 
 </body>

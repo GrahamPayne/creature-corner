@@ -1,6 +1,7 @@
 import { getCategories, getProducts } from '../api/products.js';
 import { createProductCard } from '../components/productCard.js';
 import { createFilterBar } from '../components/filterBar.js';
+import { syncNavBadge } from '../cart/navBadge.js';
 
 const grid = document.getElementById('shop-grid');
 const filterMount = document.getElementById('shop-filters');
@@ -30,6 +31,7 @@ function setActiveFilterButton(slug) {
 }
 
 async function init() {
+  syncNavBadge();
   statusEl.textContent = 'Loading specimens…';
 
   let categories;

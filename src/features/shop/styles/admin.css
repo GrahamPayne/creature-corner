@@ -227,10 +227,111 @@ body.page-admin {
     font-size: 0.85rem;
 }
 
+.admin-form-status {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
 .admin-form-actions {
     display: flex;
     gap: 10px;
     margin-top: 8px;
+}
+
+.admin-form-section {
+    border: 1px solid var(--border);
+    padding: 16px;
+}
+
+.admin-form-section-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+/* Image manager */
+.admin-image-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.admin-image-empty {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.admin-image-card {
+    width: 140px;
+}
+
+.admin-image-thumb-wrap {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+}
+
+.admin-image-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.admin-image-thumb.admin-image-uploading {
+    opacity: 0.4;
+}
+
+.admin-image-primary-badge {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    background: var(--accent);
+    color: var(--bg-dark);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 6px;
+    font-weight: 600;
+}
+
+.admin-image-status {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: var(--text-primary);
+}
+
+.admin-image-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.admin-image-card-actions .admin-btn-sm {
+    margin: 0;
+}
+
+.admin-image-file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
+
+.admin-image-add-btn {
+    display: inline-block;
+    cursor: pointer;
 }
 
 @media (max-width: 700px) {
@@ -240,5 +341,14 @@ body.page-admin {
 
     .admin-table {
         font-size: 0.75rem;
+    }
+
+    .admin-image-card,
+    .admin-image-thumb-wrap {
+        width: 110px;
+    }
+
+    .admin-image-thumb-wrap {
+        height: 110px;
     }
 }

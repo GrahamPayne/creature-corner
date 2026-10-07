@@ -9,7 +9,11 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Shop page', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/shop');
+    // networkidle, not just goto()'s default 'load': the product list
+    // loads asynchronously from Supabase after the page itself loads, and
+    // a couple of tests below take an immediate (non-retrying) .count()
+    // snapshot, which races the fetch without this.
+    await page.goto('/shop', { waitUntil: 'networkidle' });
   });
 
   test('loads without error and shows either products or a clear empty state', async ({ page }) => {
@@ -50,14 +54,20 @@ test.describe('Shop page', () => {
     }
   });
 
-  test('clicking a card (if any exist) opens a matching, working detail page', async ({ page }) => {
+  test('card links to a matching, working detail page', async ({ page }) => {
     const firstCard = page.locator('.specimen-card').first();
     test.skip((await firstCard.count()) === 0, 'no products currently published — nothing to click');
 
     const name = await firstCard.locator('.specimen-title').textContent();
-    await firstCard.locator('.specimen-title a').click();
-    await page.waitForLoadState('networkidle');
-    expect(page.url()).toMatch(/\/product\/[a-z0-9-]+$/);
+    const href = await firstCard.locator('.specimen-title a').getAttribute('href');
+    const slug = href.split('/').pop();
+
+    // `npx serve` (used for local/test hosting) doesn't apply the Cloudflare
+    // _redirects rewrite for the pretty /product/:slug path — navigate via
+    // the extensionless query-string form instead, same as every other
+    // product-detail test in this file. The pretty URL itself is covered by
+    // wrangler pages dev and live verification (see docs/SHOP_SETUP.md).
+    await page.goto(`/product?slug=${slug}`, { waitUntil: 'networkidle' });
     await expect(page.locator('.specimen-name')).toHaveText(name.trim());
     await expect(page.locator('.data-placeholder')).toHaveCount(0);
   });
@@ -79,7 +89,7 @@ test.describe('Product page', () => {
 // skips itself cleanly otherwise rather than failing.
 test.describe('Seeded sample products (optional)', () => {
   test('Larval Mask No. 3 shows full available-product detail', async ({ page }) => {
-    await page.goto('/product?slug=larval-mask-no-3');
+    await page.goto('/product?slug=larval-mask-no-3', { waitUntil: 'networkidle' });
     const notFound = await page.locator('.data-placeholder').count();
     test.skip(notFound > 0, 'supabase/seed-sample-products.sql has not been run yet');
 
@@ -89,7 +99,7 @@ test.describe('Seeded sample products (optional)', () => {
   });
 
   test('Fossilized Fragment Study shows SOLD and disables purchase', async ({ page }) => {
-    await page.goto('/product?slug=fossilized-fragment-study');
+    await page.goto('/product?slug=fossilized-fragment-study', { waitUntil: 'networkidle' });
     const notFound = await page.locator('.data-placeholder').count();
     test.skip(notFound > 0, 'supabase/seed-sample-products.sql has not been run yet');
 

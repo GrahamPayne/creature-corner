@@ -68,3 +68,31 @@ test('unauthenticated client cannot delete a product', async (t) => {
   const after = await getProducts();
   assert.ok(after.some((p) => p.id === target.id), 'product was deleted by an unauthenticated client');
 });
+
+test('unauthenticated client can list the product-images bucket (public read)', async () => {
+  const { error } = await supabase.storage.from('product-images').list();
+  assert.equal(error, null);
+});
+
+test('unauthenticated client cannot upload to the product-images bucket', async () => {
+  const blob = new Blob(['not a real image'], { type: 'image/webp' });
+  const { error } = await supabase.storage
+    .from('product-images')
+    .upload(`products/rls-test/${Date.now()}.webp`, blob);
+  assert.ok(error, 'expected an RLS error but the upload succeeded');
+});
+
+test('unauthenticated client cannot insert a product_images row', async (t) => {
+  const products = await getProducts();
+  if (products.length === 0) {
+    t.skip('no published products exist yet to attach a test image row to — run supabase/seed-sample-products.sql or add one via /admin');
+    return;
+  }
+  const { error } = await supabase.from('product_images').insert({
+    product_id: products[0].id,
+    storage_path: `products/${products[0].id}/rls-test-${Date.now()}.webp`,
+    sort_order: 999,
+    is_primary: false,
+  });
+  assert.ok(error, 'expected an RLS error but the insert succeeded');
+});

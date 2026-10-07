@@ -1,5 +1,6 @@
 import { formatCents } from '../money.js';
 import { escapeHtml } from '../dom.js';
+import { pickPrimaryImage } from '../primaryImage.js';
 
 /**
  * @param {import('../types/typedefs.js').Product} product
@@ -7,7 +8,7 @@ import { escapeHtml } from '../dom.js';
  */
 export function createProductCard(product) {
   const isSold = product.status === 'sold' || product.quantity <= 0;
-  const primaryImage = product.images.find((img) => img.isPrimary) || product.images[0] || null;
+  const primaryImage = pickPrimaryImage(product.images);
   const categoryLabel = (product.category?.name || 'Uncategorized').toUpperCase();
   const href = `/product/${product.slug}`;
 

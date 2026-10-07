@@ -72,6 +72,28 @@ Stripe). I'll put them in `src/features/shop/api/config.js`, which flips
 the shop and admin panel over from the bundled prototype data to your real
 Supabase project. Nothing else changes — same pages, same design.
 
+## Product images
+
+From a product's Edit screen (or while adding a new one) you can upload
+multiple photos, mark one Primary, reorder them, and delete them — no code
+or Supabase dashboard work needed.
+
+- **Accepted files:** JPG, PNG, WebP, up to 10MB each.
+- **Optimization:** every upload is resized/re-encoded in your browser
+  before it's sent — never upscaled, only downscaled if the long edge is
+  over 2200px, then saved as high-quality WebP (falls back to JPEG on the
+  rare browser without WebP encoding support). This keeps photos looking
+  sharp while avoiding multi-megabyte originals piling up in Storage.
+- **Storage path:** `products/<product-id>/<random-id>.webp` — never your
+  original filename, so there's no collision risk and nothing about your
+  computer leaks into the path.
+- **Primary image:** controls the photo shown on `/shop` cards and as the
+  main image on the product page. If nothing is marked Primary, the first
+  image (by order) is used automatically. No images yet → the existing "No
+  Image" placeholder.
+- **Deleting a product** also deletes its Storage files, not just the
+  database rows — nothing gets orphaned in Storage.
+
 ## Using the admin panel
 
 Once connected, go to `/admin` and log in with the email/password you

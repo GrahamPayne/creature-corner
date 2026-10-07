@@ -1,5 +1,9 @@
 import { getSupabaseClient } from '../api/supabaseClient.js';
 import { slugify } from './slug.js';
+import { uniqueImagePath } from './storagePath.js';
+import { resizeImageForUpload } from './imageProcessing.js';
+
+const IMAGE_BUCKET = 'product-images';
 
 const PRODUCT_SELECT = '*, category:categories(id, slug, name), images:product_images(id, storage_path, sort_order, is_primary)';
 
@@ -126,9 +130,21 @@ export async function adminUpdateProduct(id, patch) {
   return normalizeRow(data, supabase);
 }
 
-/** Hard delete. See docs/SHOP_SETUP.md for why this is safe (product_images cascades, order_items.product_id is SET NULL). */
+/**
+ * Hard delete. See docs/SHOP_SETUP.md for why the product_images DB rows are
+ * safe to cascade-delete (order_items.product_id is SET NULL). Storage
+ * objects are a separate system with no DB-level cascade to them, so they're
+ * explicitly removed here first — otherwise they'd be orphaned forever.
+ */
 export async function adminDeleteProduct(id) {
   const supabase = await client();
+  const product = await adminGetProduct(id);
+  if (product.images.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .from(IMAGE_BUCKET)
+      .remove(product.images.map((img) => img.storagePath));
+    if (storageError) throw storageError;
+  }
   const { error } = await supabase.from('products').delete().eq('id', id);
   if (error) throw error;
 }
@@ -143,6 +159,82 @@ async function uniqueSlugAsync(base) {
     n += 1;
   }
   return candidate;
+}
+
+function normalizeImage(row, supabase) {
+  return {
+    id: row.id,
+    url: supabase.storage.from(IMAGE_BUCKET).getPublicUrl(row.storage_path).data.publicUrl,
+    storagePath: row.storage_path,
+    isPrimary: row.is_primary,
+    sortOrder: row.sort_order,
+  };
+}
+
+/**
+ * Resizes/re-encodes `file` in the browser, uploads it to the
+ * product-images bucket at a fresh unique path, and inserts the matching
+ * product_images row. Requires an authenticated admin session — both the
+ * Storage upload and the table insert are RLS-gated on is_admin().
+ * @param {string} productId
+ * @param {File} file
+ * @param {{isPrimary?: boolean, sortOrder: number}} opts
+ */
+export async function uploadProductImage(productId, file, { isPrimary = false, sortOrder }) {
+  const supabase = await client();
+  const { blob, extension } = await resizeImageForUpload(file);
+  const path = uniqueImagePath(productId, extension);
+
+  const { error: uploadError } = await supabase.storage
+    .from(IMAGE_BUCKET)
+    .upload(path, blob, { contentType: blob.type, upsert: false });
+  if (uploadError) throw new Error(`Upload failed for "${file.name}": ${uploadError.message}`);
+
+  if (isPrimary) await clearPrimaryFlag(supabase, productId);
+
+  const { data, error } = await supabase
+    .from('product_images')
+    .insert({ product_id: productId, storage_path: path, sort_order: sortOrder, is_primary: isPrimary })
+    .select()
+    .single();
+  if (error) {
+    // Roll back the orphaned Storage object if the DB insert failed.
+    await supabase.storage.from(IMAGE_BUCKET).remove([path]);
+    throw error;
+  }
+  return normalizeImage(data, supabase);
+}
+
+async function clearPrimaryFlag(supabase, productId) {
+  const { error } = await supabase.from('product_images').update({ is_primary: false }).eq('product_id', productId);
+  if (error) throw error;
+}
+
+/** @param {string} productId @param {string} imageId */
+export async function adminSetPrimaryImage(productId, imageId) {
+  const supabase = await client();
+  await clearPrimaryFlag(supabase, productId);
+  const { error } = await supabase.from('product_images').update({ is_primary: true }).eq('id', imageId);
+  if (error) throw error;
+}
+
+/** Deletes both the Storage object and the DB row. Storage is removed first; if that fails the DB row is kept so the image (and the ability to retry) isn't silently lost. */
+export async function adminDeleteProductImage(image) {
+  const supabase = await client();
+  const { error: storageError } = await supabase.storage.from(IMAGE_BUCKET).remove([image.storagePath]);
+  if (storageError) throw storageError;
+  const { error } = await supabase.from('product_images').delete().eq('id', image.id);
+  if (error) throw error;
+}
+
+/** Renumbers sort_order 0..N-1 to match `orderedImageIds`, so order is always deterministic with no gaps. */
+export async function adminReorderImages(orderedImageIds) {
+  const supabase = await client();
+  const results = await Promise.all(
+    orderedImageIds.map((id, index) => supabase.from('product_images').update({ sort_order: index }).eq('id', id))
+  );
+  const failed = results.find((r) => r.error);
+  if (failed) throw failed.error;
 }
 
 /** Copies a product's fields (not its images) into a new draft row with a fresh unique slug. */

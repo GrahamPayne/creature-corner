@@ -1,5 +1,7 @@
 import { slugify } from './slug.js';
 import { escapeHtml } from '../dom.js';
+import { createImageManager } from './imageManager.js';
+import { uploadProductImage } from './api.js';
 
 const SHIPPING_CLASSES = [
   ['small', 'Small'],
@@ -17,9 +19,13 @@ const STATUSES = [
 ];
 
 /**
- * @param {{categories: {id:string, slug:string, name:string}[], product?: any, onSubmit: (fields: any) => Promise<void>, onCancel: () => void}} opts
+ * onSubmit saves the product fields and resolves with the saved product —
+ * it must NOT navigate away itself. onDone fires once everything, including
+ * any staged image uploads for a new product, has actually finished; that's
+ * the right time for the caller to navigate back to the dashboard.
+ * @param {{categories: {id:string, slug:string, name:string}[], product?: any, onSubmit: (fields: any) => Promise<any>, onDone: () => void, onCancel: () => void}} opts
  */
-export function createProductForm({ categories, product, onSubmit, onCancel }) {
+export function createProductForm({ categories, product, onSubmit, onDone, onCancel }) {
   const isEdit = Boolean(product);
   const form = document.createElement('form');
   form.className = 'admin-form';
@@ -36,6 +42,12 @@ export function createProductForm({ categories, product, onSubmit, onCancel }) {
 
   form.innerHTML = `
     <p class="admin-form-error" hidden></p>
+    <p class="admin-form-status" hidden></p>
+
+    <div class="admin-form-section">
+      <h2 class="admin-form-section-title">Images</h2>
+      <div id="image-manager-mount"></div>
+    </div>
 
     <label>Product name
       <input type="text" name="name" required value="${escapeHtml(product?.name ?? '')}">
@@ -103,6 +115,18 @@ export function createProductForm({ categories, product, onSubmit, onCancel }) {
   const nameInput = /** @type {HTMLInputElement} */ (form.elements.namedItem('name'));
   const slugInput = /** @type {HTMLInputElement} */ (form.elements.namedItem('slug'));
   const errorEl = /** @type {HTMLElement} */ (form.querySelector('.admin-form-error'));
+  const statusEl = /** @type {HTMLElement} */ (form.querySelector('.admin-form-status'));
+
+  const imageManager = createImageManager({
+    mode: isEdit ? 'persisted' : 'staged',
+    productId: product?.id,
+    images: product?.images ?? [],
+    onError: (message) => {
+      errorEl.textContent = message;
+      errorEl.hidden = false;
+    },
+  });
+  form.querySelector('#image-manager-mount').appendChild(imageManager.element);
 
   // Auto-suggest the slug from the name, but stop once the user has edited
   // the slug field themselves so we never clobber a manual choice.
@@ -143,7 +167,34 @@ export function createProductForm({ categories, product, onSubmit, onCancel }) {
     const submitBtn = /** @type {HTMLButtonElement} */ (form.querySelector('[type="submit"]'));
     submitBtn.disabled = true;
     try {
-      await onSubmit(fields);
+      const saved = await onSubmit(fields);
+
+      // New products can't have images until the row (and its id) exists,
+      // so staged files only get uploaded now, after a successful create —
+      // and onDone() (which navigates away) waits until this is done too,
+      // so any failure here is still visible to the admin.
+      if (!isEdit) {
+        const staged = imageManager.getStagedFiles();
+        const failures = [];
+        for (let i = 0; i < staged.length; i++) {
+          statusEl.textContent = `Uploading image ${i + 1} of ${staged.length}…`;
+          statusEl.hidden = false;
+          try {
+            await uploadProductImage(saved.id, staged[i].file, { isPrimary: staged[i].isPrimary, sortOrder: i });
+          } catch (err) {
+            console.error('Staged image upload failed', err);
+            failures.push(staged[i].file.name);
+          }
+        }
+        statusEl.hidden = true;
+        if (failures.length > 0) {
+          errorEl.textContent = `Product saved, but ${failures.length} image(s) failed to upload: ${failures.join(', ')}. You can add them from Edit.`;
+          errorEl.hidden = false;
+          submitBtn.disabled = false;
+          return;
+        }
+      }
+      onDone();
     } catch (err) {
       errorEl.textContent = err instanceof Error ? err.message : 'Something went wrong saving this product.';
       errorEl.hidden = false;

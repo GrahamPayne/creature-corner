@@ -1,6 +1,7 @@
 import { getProductBySlug } from '../api/products.js';
 import { formatCents } from '../money.js';
 import { escapeHtml } from '../dom.js';
+import { pickPrimaryImage } from '../primaryImage.js';
 
 const mount = document.getElementById('product-mount');
 
@@ -36,7 +37,7 @@ function renderNotFound() {
 function renderProduct(product) {
   const isSold = product.status === 'sold' || product.quantity <= 0;
   const images = product.images.length ? product.images : [{ url: null, isPrimary: true }];
-  const primary = images.find((img) => img.isPrimary) || images[0];
+  const primary = pickPrimaryImage(product.images) || images[0];
 
   const dataItems = [
     product.dimensions ? ['Dimensions', product.dimensions] : null,

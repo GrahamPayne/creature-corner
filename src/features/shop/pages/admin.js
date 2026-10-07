@@ -172,15 +172,16 @@ async function renderDashboard() {
         categories,
         product,
         onCancel: () => renderDashboard(),
+        onDone: () => renderDashboard(),
         onSubmit: async (fields) => {
           if (product) {
             const updated = await adminUpdateProduct(product.id, fields);
             products = products.map((p) => (p.id === product.id ? updated : p));
-          } else {
-            const created = await adminCreateProduct(fields);
-            products.unshift(created);
+            return updated;
           }
-          renderDashboard();
+          const created = await adminCreateProduct(fields);
+          products.unshift(created);
+          return created;
         },
       })
     );

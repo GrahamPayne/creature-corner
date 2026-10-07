@@ -1,0 +1,24 @@
+# Cloudflare Pages response headers.
+#
+# This is a small, actively-changing static site with no content-hashed
+# filenames, so a browser (or intermediate cache) can hold onto a stale copy
+# of a page/script after a deploy. `no-cache` (not `no-store`) tells caches
+# to always revalidate with the server before reusing a stored response —
+# still fast (a 304 when unchanged), but never silently serves old content.
+/*.html
+  Cache-Control: no-cache
+
+/shop
+  Cache-Control: no-cache
+
+/product
+  Cache-Control: no-cache
+
+/product/*
+  Cache-Control: no-cache
+
+/src/features/shop/*
+  Cache-Control: no-cache
+
+/styles.css
+  Cache-Control: no-cache

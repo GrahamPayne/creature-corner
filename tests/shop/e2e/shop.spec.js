@@ -69,6 +69,44 @@ test.describe('Product page', () => {
   });
 });
 
+// Exhaustive per-product audit: every published sample product must behave
+// identically. Guards against the exact failure mode reported in production
+// (some products' shop-card link and detail-page lookup silently
+// disagreeing while others worked) by checking every product, not a sample
+// of one or two.
+const ALL_PUBLISHED_PRODUCTS = [
+  { slug: 'recovered-specimen-painting-no-7', name: 'Recovered Specimen Painting No. 7', price: '$480.00', badge: 'AVAILABLE' },
+  { slug: 'abyssal-bloom-terrarium', name: 'Abyssal Bloom Terrarium', price: '$150.00', badge: 'AVAILABLE' },
+  { slug: 'larval-mask-no-3', name: 'Larval Mask No. 3', price: '$320.00', badge: 'AVAILABLE' },
+  { slug: 'specimen-archive-print-set', name: 'Specimen Archive Print Set', price: '$45.00', badge: 'AVAILABLE' },
+  { slug: 'resin-tooth-charm-pair', name: 'Resin Tooth Charm Pair', price: '$22.00', badge: 'AVAILABLE' },
+  { slug: 'fossilized-fragment-study', name: 'Fossilized Fragment Study', price: '$600.00', badge: 'SOLD' },
+];
+
+test.describe('Every published sample product', () => {
+  for (const p of ALL_PUBLISHED_PRODUCTS) {
+    test(`"${p.name}": card href, detail content, and refresh are all consistent`, async ({ page }) => {
+      // Card href must point at the correct pretty URL.
+      await page.goto('/shop');
+      const link = page.locator('.specimen-title a', { hasText: p.name });
+      await expect(link).toHaveAttribute('href', `/product/${p.slug}`);
+
+      // Detail page (via the locally-testable query-string form; the pretty
+      // /product/:slug path is covered by `wrangler pages dev` and live
+      // verification, see docs/SHOP_SETUP.md) must render this exact product.
+      await page.goto(`/product?slug=${p.slug}`);
+      await expect(page.locator('.specimen-name')).toHaveText(p.name);
+      await expect(page.locator('.product-price')).toContainText(p.price);
+      await expect(page.locator('.specimen-badge')).toHaveText(p.badge);
+      await expect(page.locator('.data-placeholder')).toHaveCount(0);
+
+      // Hard refresh must render the same thing again, not a stale/blank state.
+      await page.reload();
+      await expect(page.locator('.specimen-name')).toHaveText(p.name);
+    });
+  }
+});
+
 test.describe('Shop nav visibility', () => {
   test('Shop is visible in the main nav on other pages, with no active state', async ({ page }) => {
     await page.goto('/gallery');

@@ -10,6 +10,11 @@
     <base href="/">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="src/features/shop/styles/shop.css">
+    <!-- No bundler on this site: maps the bare specifier used in shop JS to
+         a CDN build matching the pinned version in package.json. -->
+    <script type="importmap">
+    { "imports": { "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.117.2" } }
+    </script>
 </head>
 <body class="page-product">
 

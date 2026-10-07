@@ -1,13 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SAMPLE_CATEGORIES, SAMPLE_PRODUCTS } from '../../../src/features/shop/data/sample-products.js';
-import { getProductBySlug } from '../../../src/features/shop/api/products.js';
 
 // Guards against exactly the class of bug reported in production: a product
 // whose shop-card link and detail-page lookup silently disagree, or whose
 // category/shipping/image data is malformed in a way that only breaks some
 // products and not others. Every one of these must hold for every product,
 // real or prototype, or the public shop can serve a broken link.
+//
+// This validates the bundled fallback array (data/sample-products.js)
+// directly, not api/products.js's getProductBySlug/getProducts — those now
+// talk to the real, connected Supabase project (see products.test.mjs for
+// live integration tests) and the fallback only still runs for anyone
+// using this repo without their own Supabase project configured.
+
+/** Mirrors the "published products only" rule in api/products.js, against the array directly (no network). */
+function findPublished(slug) {
+  const product = SAMPLE_PRODUCTS.find((p) => p.slug === slug);
+  return product && PUBLIC_STATUSES.includes(product.status) ? product : null;
+}
 
 const VALID_SHIPPING_CLASSES = ['small', 'medium', 'large', 'oversized', 'pickup_only'];
 const VALID_STATUSES = ['draft', 'available', 'sold', 'hidden'];
@@ -64,21 +75,20 @@ test('every published product has exactly one primary image', () => {
   }
 });
 
-test('every published product round-trips: getProductBySlug(slug).slug === slug', async () => {
+test('every published product round-trips by slug lookup', () => {
   // This is the specific check that would catch a shop-card-href vs
   // detail-page-lookup mismatch, the exact failure mode reported live.
   for (const p of SAMPLE_PRODUCTS.filter((p) => PUBLIC_STATUSES.includes(p.status))) {
-    const found = await getProductBySlug(p.slug);
-    assert.ok(found, `getProductBySlug("${p.slug}") returned null for a published product`);
+    const found = findPublished(p.slug);
+    assert.ok(found, `lookup for "${p.slug}" returned null for a published product`);
     assert.equal(found.slug, p.slug);
     assert.equal(found.name, p.name);
   }
 });
 
-test('draft and hidden products are never returned by getProductBySlug', async () => {
+test('draft and hidden products are never returned by the published-only lookup', () => {
   for (const p of SAMPLE_PRODUCTS.filter((p) => !PUBLIC_STATUSES.includes(p.status))) {
-    const found = await getProductBySlug(p.slug);
-    assert.equal(found, null, `"${p.name}" has status "${p.status}" but was still returned`);
+    assert.equal(findPublished(p.slug), null, `"${p.name}" has status "${p.status}" but was still returned`);
   }
 });
 

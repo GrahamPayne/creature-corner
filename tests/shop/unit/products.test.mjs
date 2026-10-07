@@ -2,39 +2,51 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getCategories, getProducts, getProductBySlug } from '../../../src/features/shop/api/products.js';
 
-// These exercise the sample-data fallback path (api/config.js has placeholder
-// Supabase credentials in this environment), which mirrors the real RLS
-// behavior: only 'available'/'sold' products are ever publicly visible.
+// Live integration tests against the real, connected Supabase project
+// (src/features/shop/api/config.js has real credentials — see
+// docs/SHOP_SETUP.md). Categories/shipping classes are stable seed data
+// from supabase/schema.sql; products are managed through /admin and can
+// change at any time, so these deliberately don't assert fixed counts or
+// specific product content — only the invariants that must always hold
+// regardless of what's currently in the table (most importantly, that RLS
+// is doing its job: only published products are ever returned here).
 
-test('getCategories returns the seeded category list', async () => {
+test('getCategories returns the 5 categories seeded by supabase/schema.sql', async () => {
   const categories = await getCategories();
   assert.equal(categories.length, 5);
-  assert.ok(categories.some((c) => c.slug === 'masks'));
+  for (const slug of ['original-art', 'plants', 'masks', 'prints', 'small-stuff']) {
+    assert.ok(categories.some((c) => c.slug === slug), `missing category "${slug}"`);
+  }
 });
 
-test('getProducts only returns published (available/sold) products', async () => {
+test('getProducts only ever returns published (available/sold) products', async () => {
   const products = await getProducts();
+  assert.ok(Array.isArray(products));
   assert.ok(products.every((p) => p.status === 'available' || p.status === 'sold'));
-  assert.ok(!products.some((p) => p.slug === 'unfinished-creature-bust'));
-  assert.ok(!products.some((p) => p.slug === 'retired-process-print'));
 });
 
-test('getProducts filters by category slug', async () => {
+test('getProducts filtering by an unknown category returns an empty array, not an error', async () => {
+  const products = await getProducts({ categorySlug: 'does-not-exist' });
+  assert.deepEqual(products, []);
+});
+
+test('getProducts({categorySlug}) only returns products in that category', async () => {
   const products = await getProducts({ categorySlug: 'masks' });
-  assert.ok(products.length > 0);
   assert.ok(products.every((p) => p.category?.slug === 'masks'));
 });
 
-test('getProductBySlug returns null for draft/hidden and unknown slugs', async () => {
-  assert.equal(await getProductBySlug('unfinished-creature-bust'), null);
-  assert.equal(await getProductBySlug('retired-process-print'), null);
-  assert.equal(await getProductBySlug('does-not-exist'), null);
+test('getProductBySlug returns null for an unknown slug', async () => {
+  assert.equal(await getProductBySlug('definitely-does-not-exist-12345'), null);
 });
 
-test('getProductBySlug returns a full product for a published slug', async () => {
-  const product = await getProductBySlug('larval-mask-no-3');
-  assert.ok(product);
-  assert.equal(product.name, 'Larval Mask No. 3');
-  assert.equal(product.priceCents, 32000);
-  assert.ok(product.images.length > 0);
+test('every product returned by getProducts round-trips through getProductBySlug', async () => {
+  const products = await getProducts();
+  for (const p of products.slice(0, 5)) {
+    // slice(0,5): enough to catch a systemic bug without making this test's
+    // runtime scale with however many real products exist.
+    const found = await getProductBySlug(p.slug);
+    assert.ok(found, `getProductBySlug("${p.slug}") returned null for a product getProducts() just listed`);
+    assert.equal(found.slug, p.slug);
+    assert.equal(found.id, p.id);
+  }
 });

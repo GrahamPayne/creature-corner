@@ -1,19 +1,21 @@
+import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from './config.js';
 
-// No bundler on this site, so the Supabase client loads straight from a CDN
-// as an ES module — and only when the project is actually configured, so
-// sample-data mode (the default today) never makes a network request for it.
-const SUPABASE_JS_CDN_URL = 'https://esm.sh/@supabase/supabase-js@2';
+// Bare specifier ('@supabase/supabase-js') resolves two different ways by
+// design, both pointing at the same package version (see package.json /
+// the importmap in each HTML page that loads shop code):
+//  - Node (unit tests): resolves from node_modules normally.
+//  - Browser (no bundler on this site): resolved via an <script
+//    type="importmap"> entry to a CDN build, since browsers can't resolve
+//    bare specifiers on their own.
+// This replaces an earlier version that dynamically imported a CDN URL
+// directly, which worked in the browser but threw in Node.
 
-let clientPromise = null;
+let client = null;
 
-/** Returns a lazily-created Supabase client promise, or null if unconfigured. @returns {Promise<any>|null} */
+/** Lazily-created Supabase client, or null if unconfigured. @returns {any|null} */
 export function getSupabaseClient() {
   if (!isSupabaseConfigured()) return null;
-  if (!clientPromise) {
-    clientPromise = import(SUPABASE_JS_CDN_URL).then(({ createClient }) =>
-      createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-    );
-  }
-  return clientPromise;
+  if (!client) client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return client;
 }

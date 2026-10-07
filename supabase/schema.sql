@@ -261,3 +261,19 @@ create policy "only admins read order items"
     on order_items for select
     to authenticated
     using (is_admin());
+
+-- ============================================================
+-- TABLE-LEVEL GRANTS
+--
+-- Row Level Security policies above are the real access control, but
+-- they're the SECOND check: Postgres first checks base table privileges,
+-- and tables created via the SQL editor do not automatically get the
+-- anon/authenticated grants that Supabase's dashboard table creator adds
+-- for you. Without these, PostgREST rejects requests before RLS even
+-- runs. Granting broad table privileges here is safe — RLS still decides
+-- which actual rows are visible/writable.
+-- ============================================================
+grant select on categories, products, product_images, shipping_classes to anon, authenticated;
+grant insert, update, delete on categories, products, product_images, shipping_classes to authenticated;
+grant select on orders, order_items to authenticated;
+grant execute on function is_admin() to anon, authenticated;

@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Product - Creature Corner</title>
     <meta name="description" content="View details for an original piece from Creature Corner.">
+    <!-- This page is also served at /product/<slug> (see _redirects), which makes every
+         relative URL below resolve against the wrong base without this. -->
+    <base href="/">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="src/features/shop/styles/shop.css">
 </head>

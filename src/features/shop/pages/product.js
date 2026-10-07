@@ -13,6 +13,14 @@ const SHIPPING_LABELS = {
 };
 
 function slugFromUrl() {
+  // Production/wrangler: Cloudflare rewrites /product/:slug to this page
+  // via a 200 rewrite, which leaves location.pathname as the original
+  // /product/<slug> untouched (see _redirects). Check that first.
+  const pathParts = location.pathname.split('/').filter(Boolean);
+  if (pathParts.length >= 2 && pathParts[0] === 'product') {
+    return decodeURIComponent(pathParts[1]);
+  }
+  // Local/manual testing: /product.html?slug=... or /product?slug=...
   return new URLSearchParams(location.search).get('slug');
 }
 

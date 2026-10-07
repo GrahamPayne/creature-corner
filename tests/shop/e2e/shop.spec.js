@@ -68,3 +68,26 @@ test.describe('Product page', () => {
     await expect(page.locator('.data-placeholder')).toContainText('could not be found');
   });
 });
+
+test.describe('Shop nav visibility', () => {
+  test('Shop is visible in the main nav on other pages, with no active state', async ({ page }) => {
+    await page.goto('/gallery');
+    // On narrow viewports nav-links is collapsed behind the hamburger toggle;
+    // open it first so the link's own visibility is what's under test.
+    const toggle = page.locator('.nav-toggle');
+    if (await toggle.isVisible()) await toggle.click();
+    const shopLink = page.locator('.nav-links a[href="shop.html"]');
+    await expect(shopLink).toBeVisible();
+    await expect(shopLink).not.toHaveClass(/active/);
+  });
+
+  test('Shop nav link is active on the shop page', async ({ page }) => {
+    await page.goto('/shop');
+    await expect(page.locator('.nav-links a[href="shop.html"]')).toHaveClass(/active/);
+  });
+
+  test('Shop nav link is active on a product page', async ({ page }) => {
+    await page.goto('/product?slug=larval-mask-no-3');
+    await expect(page.locator('.nav-links a[href="shop.html"]')).toHaveClass(/active/);
+  });
+});

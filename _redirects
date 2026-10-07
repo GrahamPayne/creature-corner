@@ -1,6 +1,21 @@
 # Cloudflare Pages routing for the shop's dynamic product URLs.
-# The product slug is passed through as a query param rather than parsed
-# from the path, so product.html only ever has one way to read it.
-# Not understood by `npx serve` locally — use /product?slug=... directly
-# when testing locally (see docs/SHOP_SETUP.md).
-/product/:slug  /product.html?slug=:slug  200
+# This is a 200 rewrite (serve this content, keep the original URL in the
+# browser's address bar) rather than a redirect.
+#
+# Two Cloudflare Pages behaviors that make this rule less obvious than it
+# looks, both confirmed with `wrangler pages dev`:
+#  1. A rewrite never exposes its destination's query string to client-side
+#     JS — location.search stays whatever it was on the original request.
+#     So product.js reads the slug from location.pathname instead, which a
+#     rewrite correctly leaves as the original /product/:slug.
+#  2. Cloudflare Pages unconditionally 308-redirects ANY resolved .html
+#     path to its extensionless form — including internal rewrite
+#     destinations, not just direct requests. Targeting /product.html here
+#     (even with no query string) triggers that redirect, which collapses
+#     the path to a bare /product with the slug lost entirely. Targeting
+#     the already-extensionless /product avoids it.
+#
+# Not understood by `npx serve` locally — use /product?slug=... directly,
+# or `npx wrangler pages dev .` which does understand this file
+# (see docs/SHOP_SETUP.md).
+/product/:slug  /product  200

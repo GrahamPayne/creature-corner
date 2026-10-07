@@ -63,6 +63,26 @@ See `.env.example` at the repo root for where each of these goes
 config). Stripe-related variables will be added to that file in a later
 stage, once Checkout is wired up.
 
+## 6. Connect the site to your project
+
+Once you've done steps 1–5, send me the **Project URL** and **anon key**
+from step 5 (never the service_role key over chat — that one's server-only
+and goes straight into the Cloudflare Pages dashboard when we get to
+Stripe). I'll put them in `src/features/shop/api/config.js`, which flips
+the shop and admin panel over from the bundled prototype data to your real
+Supabase project. Nothing else changes — same pages, same design.
+
+## Using the admin panel
+
+Once connected, go to `/admin` and log in with the email/password you
+created in step 4. From there you can add, edit, duplicate, and delete
+products, and change their status/price/quantity/featured flag — no code
+edits needed. The admin panel is intentionally plain (not styled to match
+the public site) since it's a working tool, not a page visitors see.
+
+If `/admin` still shows "Supabase isn't connected yet", steps 1–6 above
+haven't been completed/sent to me yet.
+
 ## Known local-dev quirk: product URLs
 
 In production, `/product/some-slug` is rewritten by `_redirects` to

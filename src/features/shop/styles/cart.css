@@ -1,9 +1,90 @@
 /* ============================================
    CART / CHECKOUT — scoped additions on top of styles.css and shop.css.
+   Self-contained: does not depend on admin.css, which isn't (and
+   shouldn't be) loaded on this public-facing page.
    ============================================ */
 
 .cart-container {
     max-width: 800px;
+}
+
+.cart-notice {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+}
+
+.cart-notice-error {
+    color: var(--accent);
+}
+
+.cart-section-title {
+    font-size: 0.85rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+}
+
+.cart-radio-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 20px;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.cart-btn-sm {
+    padding: 5px 10px;
+    font-size: 0.72rem;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    cursor: pointer;
+}
+
+.cart-btn-sm:hover:not(:disabled) {
+    color: var(--text-primary);
+    border-color: var(--text-secondary);
+}
+
+.cart-btn-sm:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.cart-btn-danger {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.cart-address-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.cart-address-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.cart-address-form input {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.cart-address-form input:disabled {
+    color: var(--text-muted);
 }
 
 .cart-items {

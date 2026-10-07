@@ -53,7 +53,7 @@ function renderUnavailableRow(line) {
   return `
     <div class="cart-item cart-item-unavailable">
       <p class="cart-unavailable-message">${message}</p>
-      <button type="button" class="admin-btn-sm" data-remove="${line.entry.productId}">Remove from cart</button>
+      <button type="button" class="cart-btn-sm" data-remove="${line.entry.productId}">Remove from cart</button>
     </div>
   `;
 }
@@ -72,10 +72,10 @@ function renderAvailableRow(line) {
         <div class="cart-item-price">${formatCents(product.priceCents)} each</div>
         ${line.adjusted ? `<p class="cart-adjusted-note">Only ${product.quantity} remain. Your quantity was adjusted.</p>` : ''}
         <div class="cart-qty-controls">
-          <button type="button" class="admin-btn-sm" data-qty-down="${product.id}" ${quantity <= 1 ? 'disabled' : ''}>−</button>
+          <button type="button" class="cart-btn-sm" data-qty-down="${product.id}" ${quantity <= 1 ? 'disabled' : ''}>−</button>
           <span class="cart-qty-value">${quantity}</span>
-          <button type="button" class="admin-btn-sm" data-qty-up="${product.id}" ${quantity >= product.quantity ? 'disabled' : ''}>+</button>
-          <button type="button" class="admin-btn-sm admin-btn-danger" data-remove="${product.id}">Remove</button>
+          <button type="button" class="cart-btn-sm" data-qty-up="${product.id}" ${quantity >= product.quantity ? 'disabled' : ''}>+</button>
+          <button type="button" class="cart-btn-sm cart-btn-danger" data-remove="${product.id}">Remove</button>
         </div>
       </div>
       <div class="cart-item-total">${formatCents(lineTotal)}</div>
@@ -132,22 +132,22 @@ function render(entries, products, shippingClasses) {
     </div>
 
     ${conflict ? `
-      <p class="admin-notice-error cart-conflict">
+      <p class="cart-notice cart-notice-error cart-conflict">
         Your cart has items that can't be fulfilled together — one item can only be shipped, another can only be
         picked up locally. Please remove one before continuing.
       </p>
     ` : availableLines.length === 0 ? '' : `
       <section class="cart-fulfillment">
-        <h2 class="admin-form-section-title">Fulfillment</h2>
+        <h2 class="cart-section-title">Fulfillment</h2>
         ${shippingAvailable && pickupAvailable ? `
-          <label class="admin-form-checkbox">
+          <label class="cart-radio-label">
             <input type="radio" name="fulfillment" value="shipping" ${formState.fulfillment === 'shipping' ? 'checked' : ''}> Shipping
           </label>
-          <label class="admin-form-checkbox">
+          <label class="cart-radio-label">
             <input type="radio" name="fulfillment" value="pickup" ${formState.fulfillment === 'pickup' ? 'checked' : ''}> Local Pickup
           </label>
-        ` : shippingAvailable ? `<p class="admin-notice">Shipping only — this order doesn't qualify for local pickup.</p>`
-          : `<p class="admin-notice">Local pickup only — this item can't be shipped.</p>`}
+        ` : shippingAvailable ? `<p class="cart-notice">Shipping only — this order doesn't qualify for local pickup.</p>`
+          : `<p class="cart-notice">Local pickup only — this item can't be shipped.</p>`}
 
         ${formState.fulfillment === 'shipping' ? renderShippingAddressForm() : formState.fulfillment === 'pickup' ? renderPickupForm() : ''}
       </section>
@@ -160,7 +160,7 @@ function render(entries, products, shippingClasses) {
         </div>
         ${shipping.shippingClass ? `<p class="cart-shipping-note">Based on the largest item in your cart: ${SHIPPING_LABELS[shipping.shippingClass] || shipping.shippingClass}.</p>` : ''}
         <div class="cart-summary-row cart-summary-total"><span>Total</span><span>${totalCents === null ? '—' : formatCents(totalCents)}</span></div>
-        ${!shipping.configured ? '<p class="admin-notice-error">Shipping rates haven’t been set yet — checkout can’t continue until they are.</p>' : ''}
+        ${!shipping.configured ? '<p class="cart-notice cart-notice-error">Shipping rates haven’t been set yet — checkout can’t continue until they are.</p>' : ''}
 
         <button type="button" class="btn btn-primary cart-continue-btn" id="continue-to-payment-btn" ${canContinue ? '' : 'disabled'}>
           Continue to Payment
@@ -178,8 +178,8 @@ function render(entries, products, shippingClasses) {
 function renderShippingAddressForm() {
   const a = formState.address;
   return `
-    <div class="admin-form cart-address-form">
-      <p class="admin-notice">Shipping within the United States only for now.</p>
+    <div class="cart-address-form">
+      <p class="cart-notice">Shipping within the United States only for now.</p>
       <label>Full name <input type="text" data-field="fullName" value="${escapeHtml(a.fullName)}" required></label>
       <label>Email <input type="email" data-field="email" value="${escapeHtml(a.email)}" required></label>
       <label>Address line 1 <input type="text" data-field="line1" value="${escapeHtml(a.line1)}" required></label>
@@ -195,7 +195,7 @@ function renderShippingAddressForm() {
 function renderPickupForm() {
   const a = formState.address;
   return `
-    <div class="admin-form cart-address-form">
+    <div class="cart-address-form">
       <label>Full name <input type="text" data-field="fullName" value="${escapeHtml(a.fullName)}" required></label>
       <label>Email <input type="email" data-field="email" value="${escapeHtml(a.email)}" required></label>
       <label>Phone (optional) <input type="tel" data-field="phone" value="${escapeHtml(a.phone)}"></label>
@@ -282,7 +282,7 @@ async function init() {
     return;
   }
 
-  mount.innerHTML = '<p class="admin-notice">Loading your cart&hellip;</p>';
+  mount.innerHTML = '<p class="cart-notice">Loading your cart&hellip;</p>';
 
   try {
     const [products, shippingClasses] = await Promise.all([

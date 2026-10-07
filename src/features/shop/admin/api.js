@@ -19,9 +19,11 @@ function normalizeRow(row, supabase) {
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((img) => ({
       id: img.id,
+      productId: row.id,
       url: supabase.storage.from('product-images').getPublicUrl(img.storage_path).data.publicUrl,
       storagePath: img.storage_path,
       isPrimary: img.is_primary,
+      sortOrder: img.sort_order,
     }));
 
   return {
@@ -164,6 +166,7 @@ async function uniqueSlugAsync(base) {
 function normalizeImage(row, supabase) {
   return {
     id: row.id,
+    productId: row.product_id,
     url: supabase.storage.from(IMAGE_BUCKET).getPublicUrl(row.storage_path).data.publicUrl,
     storagePath: row.storage_path,
     isPrimary: row.is_primary,
@@ -218,13 +221,31 @@ export async function adminSetPrimaryImage(productId, imageId) {
   if (error) throw error;
 }
 
-/** Deletes both the Storage object and the DB row. Storage is removed first; if that fails the DB row is kept so the image (and the ability to retry) isn't silently lost. */
+/**
+ * Deletes both the Storage object and the DB row. Storage is removed first;
+ * if that fails the DB row is kept so the image (and the ability to retry)
+ * isn't silently lost. If the deleted image was primary, promotes the next
+ * remaining image (by sort_order) to primary, so a product is never left
+ * with zero primary images while it still has photos.
+ */
 export async function adminDeleteProductImage(image) {
   const supabase = await client();
   const { error: storageError } = await supabase.storage.from(IMAGE_BUCKET).remove([image.storagePath]);
   if (storageError) throw storageError;
   const { error } = await supabase.from('product_images').delete().eq('id', image.id);
   if (error) throw error;
+
+  if (image.isPrimary && image.productId) {
+    const { data: remaining, error: fetchError } = await supabase
+      .from('product_images')
+      .select('id')
+      .eq('product_id', image.productId)
+      .order('sort_order')
+      .limit(1);
+    if (!fetchError && remaining && remaining.length > 0) {
+      await supabase.from('product_images').update({ is_primary: true }).eq('id', remaining[0].id);
+    }
+  }
 }
 
 /** Renumbers sort_order 0..N-1 to match `orderedImageIds`, so order is always deterministic with no gaps. */

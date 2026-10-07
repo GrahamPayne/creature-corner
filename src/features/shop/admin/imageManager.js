@@ -14,11 +14,18 @@ export function createImageManager({ mode, productId, images = [], onError = () 
   const wrap = document.createElement('div');
   wrap.className = 'admin-image-manager';
 
-  /** @type {{id?: string, file?: File, url: string, storagePath?: string, isPrimary: boolean, status: string}[]} */
+  /** @type {{id?: string, productId?: string, file?: File, url: string, storagePath?: string, isPrimary: boolean, status: string}[]} */
   let items = images
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((img) => ({ id: img.id, url: img.url, storagePath: img.storagePath, isPrimary: img.isPrimary, status: 'ready' }));
+    .map((img) => ({
+      id: img.id,
+      productId: img.productId ?? productId,
+      url: img.url,
+      storagePath: img.storagePath,
+      isPrimary: img.isPrimary,
+      status: 'ready',
+    }));
 
   const listEl = document.createElement('div');
   listEl.className = 'admin-image-list';
@@ -116,7 +123,11 @@ export function createImageManager({ mode, productId, images = [], onError = () 
     } else if (item.url) {
       URL.revokeObjectURL(item.url);
     }
+    const wasPrimary = item.isPrimary;
     items = items.filter((i) => i !== item);
+    // Mirrors adminDeleteProductImage's server-side auto-promotion, so the
+    // "Primary" badge is correct immediately rather than only after a reload.
+    if (wasPrimary && items.length > 0) items[0].isPrimary = true;
     render();
   }
 

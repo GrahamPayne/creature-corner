@@ -24,12 +24,17 @@ local-dev, and deploy sections get added as those stages land.
 ## 3. Create the Storage bucket
 
 1. In the dashboard, open **Storage** → **New bucket**.
-2. Name it exactly `product-images`. Leave **Public bucket** toggled
-   **off** — public read access is granted through a policy instead (next
-   step), which keeps all access rules in one consistent place.
+2. Name it exactly `product-images` and toggle **Public bucket** **ON**.
+   These are storefront product photos meant for anyone to see — and
+   practically, Supabase's public image URLs (what every product photo on
+   the site uses) only work without authentication when the bucket itself
+   is Public; an RLS read policy alone isn't enough for that specific URL
+   path.
 3. Open **SQL Editor** again, paste the contents of
-   `supabase/storage-policies.sql`, and run it. This lets anyone view
-   product photos but only admins upload/replace/delete them.
+   `supabase/storage-policies.sql`, and run it. The bucket being Public
+   handles anonymous reads; these policies are what actually keep
+   uploading/replacing/deleting admin-only, regardless of the bucket's
+   public/private setting.
 
 ## 4. Create your first admin account
 

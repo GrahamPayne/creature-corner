@@ -8,7 +8,7 @@ import { uploadProductImage, adminDeleteProductImage, adminSetPrimaryImage, admi
  * Supabase immediately).
  *
  * @param {{mode: 'staged'|'persisted', productId?: string, images?: any[], onError?: (msg:string)=>void}} opts
- * @returns {{element: HTMLElement, getStagedFiles: () => {file: File, isPrimary: boolean}[]}}
+ * @returns {{element: HTMLElement, getStagedFiles: () => {file: File, isPrimary: boolean}[], getImageCount: () => number}}
  */
 export function createImageManager({ mode, productId, images = [], onError = () => {} }) {
   const wrap = document.createElement('div');
@@ -179,5 +179,6 @@ export function createImageManager({ mode, productId, images = [], onError = () 
   return {
     element: wrap,
     getStagedFiles: () => items.map((i) => ({ file: i.file, isPrimary: i.isPrimary })),
+    getImageCount: () => items.length,
   };
 }

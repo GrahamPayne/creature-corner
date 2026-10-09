@@ -45,8 +45,13 @@ async function init() {
     return;
   }
 
+  // Customers should never see a category filter button that leads to an
+  // empty page — the Categories admin screen (adminListCategoriesWithCounts)
+  // still shows every category for management; this is public-shop only.
+  const categoriesWithProducts = categories.filter((c) => products.some((p) => p.category?.slug === c.slug));
+
   let activeSlug = categorySlugFromUrl();
-  if (activeSlug && !categories.some((c) => c.slug === activeSlug)) activeSlug = null;
+  if (activeSlug && !categoriesWithProducts.some((c) => c.slug === activeSlug)) activeSlug = null;
 
   const applyFilter = (slug) => {
     const url = new URL(location.href);
@@ -58,7 +63,7 @@ async function init() {
     renderGrid(slug ? products.filter((p) => p.category?.slug === slug) : products);
   };
 
-  filterMount.replaceChildren(createFilterBar(categories, { activeSlug, onSelect: applyFilter }));
+  filterMount.replaceChildren(createFilterBar(categoriesWithProducts, { activeSlug, onSelect: applyFilter }));
 
   statusEl.textContent = `ARCHIVE // ${products.length} ITEM${products.length === 1 ? '' : 'S'} LISTED`;
   renderGrid(activeSlug ? products.filter((p) => p.category?.slug === activeSlug) : products);

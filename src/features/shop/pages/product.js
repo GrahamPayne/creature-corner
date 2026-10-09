@@ -4,16 +4,9 @@ import { escapeHtml } from '../dom.js';
 import { pickPrimaryImage } from '../primaryImage.js';
 import { addToCart, readCart } from '../cart/cart.js';
 import { syncNavBadge } from '../cart/navBadge.js';
+import { getAvailabilityLabel, getAvailabilityVariant, getFulfillmentSummary } from '../availability.js';
 
 const mount = document.getElementById('product-mount');
-
-const SHIPPING_LABELS = {
-  small: 'Small parcel',
-  medium: 'Medium parcel',
-  large: 'Large parcel',
-  oversized: 'Oversized / freight',
-  pickup_only: 'Local pickup only',
-};
 
 function slugFromUrl() {
   // Production/wrangler: Cloudflare rewrites /product/:slug to this page
@@ -38,6 +31,8 @@ function renderNotFound() {
 
 function renderProduct(product) {
   const isSold = product.status === 'sold' || product.quantity <= 0;
+  const availabilityLabel = getAvailabilityLabel(product);
+  const availabilityVariant = getAvailabilityVariant(product);
   const images = product.images.length ? product.images : [{ url: null, isPrimary: true }];
   const primary = pickPrimaryImage(product.images) || images[0];
 
@@ -45,9 +40,10 @@ function renderProduct(product) {
     product.dimensions ? ['Dimensions', product.dimensions] : null,
     product.materials ? ['Materials', product.materials] : null,
     ['Category', product.category?.name || '—'],
-    ['Quantity Available', isSold ? 0 : product.quantity],
-    ['Shipping', SHIPPING_LABELS[product.shippingClass] || product.shippingClass],
-    ['Local Pickup', product.pickupAvailable ? 'Available' : 'Not available'],
+    // One-of-a-kind (qty 1) pieces don't need a "stock count" box — the
+    // availability badge above already says whether it's purchasable.
+    !isSold && product.quantity > 1 ? ['Quantity Available', product.quantity] : null,
+    ['Fulfillment', getFulfillmentSummary(product)],
   ].filter(Boolean);
 
   mount.innerHTML = `
@@ -74,7 +70,7 @@ function renderProduct(product) {
           ${product.featured ? '<span class="specimen-category">FEATURED</span>' : ''}
         </div>
         <h1 class="specimen-name">${escapeHtml(product.name)}</h1>
-        <span class="specimen-badge${isSold ? '' : ' documented'}">${isSold ? 'SOLD' : 'AVAILABLE'}</span>
+        <span class="specimen-badge ${availabilityVariant}">${escapeHtml(availabilityLabel.toUpperCase())}</span>
       </header>
 
       <div class="product-price">${formatCents(product.priceCents)}</div>
@@ -147,6 +143,40 @@ function wireBuyButton(product, isSold) {
   refresh();
 }
 
+/** Creates the tag on first call, updates it on every later navigation — product.html is one static shell reused for every slug. */
+function upsertMeta(attrName, attrValue, content) {
+  let el = document.head.querySelector(`meta[${attrName}="${attrValue}"]`);
+  if (!el) {
+    el = document.createElement('meta');
+    el.setAttribute(attrName, attrValue);
+    document.head.appendChild(el);
+  }
+  el.setAttribute('content', content);
+}
+
+function upsertCanonical(href) {
+  let el = /** @type {HTMLLinkElement} */ (document.head.querySelector('link[rel="canonical"]'));
+  if (!el) {
+    el = document.createElement('link');
+    el.rel = 'canonical';
+    document.head.appendChild(el);
+  }
+  el.href = href;
+}
+
+function updateProductMeta(product) {
+  const url = `https://creaturecorner.art/product/${product.slug}`;
+  const description = product.shortDescription || product.description || `${product.name} — original art from Creature Corner.`;
+  upsertMeta('name', 'description', description);
+  upsertCanonical(url);
+  upsertMeta('property', 'og:title', `${product.name} - Creature Corner`);
+  upsertMeta('property', 'og:description', description);
+  upsertMeta('property', 'og:url', url);
+  upsertMeta('property', 'og:type', 'product');
+  const primary = pickPrimaryImage(product.images);
+  if (primary?.url) upsertMeta('property', 'og:image', primary.url);
+}
+
 async function init() {
   syncNavBadge();
   const slug = slugFromUrl();
@@ -162,6 +192,7 @@ async function init() {
       return;
     }
     document.title = `${product.name} - Creature Corner`;
+    updateProductMeta(product);
     renderProduct(product);
   } catch (err) {
     console.error('Failed to load product', err);

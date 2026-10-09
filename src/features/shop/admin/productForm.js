@@ -11,6 +11,7 @@ import {
   resolveFulfillment,
   validatePackedShipping,
 } from './fulfillment.js';
+import { computeReadinessChecks, getBlockingIssues } from './readiness.js';
 
 const STATUSES = [
   ['draft', 'Draft'],
@@ -20,13 +21,56 @@ const STATUSES = [
 ];
 
 /**
+ * Reads the form's current (possibly incomplete/in-progress) values into
+ * a product-shaped draft — the single source both the live readiness
+ * checklist and the submit-time publish-safety check read from, so they
+ * can never disagree with each other.
+ * @param {HTMLFormElement} form
+ * @param {{getImageCount: () => number}} imageManager
+ */
+function readDraftFromForm(form, imageManager) {
+  const data = new FormData(form);
+  const num = (name) => {
+    const raw = data.get(name);
+    return raw === null || raw === '' ? null : Number(raw);
+  };
+
+  let shippingClass = 'medium';
+  let pickupAvailable = false;
+  try {
+    ({ shippingClass, pickupAvailable } = resolveFulfillment(String(data.get('fulfillmentMode')), String(data.get('packageSize') || 'medium')));
+  } catch {
+    // Mid-edit/unrecognized value — the checklist just falls back to a sensible default until the select settles.
+  }
+
+  return {
+    priceCents: Math.round((Number(data.get('price')) || 0) * 100),
+    categoryId: String(data.get('categoryId') || '') || null,
+    quantity: Number(data.get('quantity')) || 0,
+    shippingClass,
+    pickupAvailable,
+    shortDescription: String(data.get('shortDescription') || ''),
+    description: String(data.get('description') || ''),
+    materials: String(data.get('materials') || ''),
+    dimensions: String(data.get('dimensions') || ''),
+    packedWeightLb: num('packedWeightLb') || 0,
+    packedWeightOz: num('packedWeightOz') || 0,
+    packageLengthIn: num('packageLengthIn'),
+    packageWidthIn: num('packageWidthIn'),
+    packageHeightIn: num('packageHeightIn'),
+    imageCount: imageManager.getImageCount(),
+    status: String(data.get('status') || 'draft'),
+  };
+}
+
+/**
  * onSubmit saves the product fields and resolves with the saved product —
  * it must NOT navigate away itself. onDone fires once everything, including
  * any staged image uploads for a new product, has actually finished; that's
  * the right time for the caller to navigate back to the dashboard.
- * @param {{categories: {id:string, slug:string, name:string}[], product?: any, onSubmit: (fields: any) => Promise<any>, onDone: () => void, onCancel: () => void}} opts
+ * @param {{categories: {id:string, slug:string, name:string}[], product?: any, shippingRates?: Record<string, number|null>, onSubmit: (fields: any) => Promise<any>, onDone: () => void, onCancel: () => void}} opts
  */
-export function createProductForm({ categories, product, onSubmit, onDone, onCancel }) {
+export function createProductForm({ categories, product, shippingRates = {}, onSubmit, onDone, onCancel }) {
   const isEdit = Boolean(product);
   const form = document.createElement('form');
   form.className = 'admin-form';
@@ -50,6 +94,11 @@ export function createProductForm({ categories, product, onSubmit, onDone, onCan
   form.innerHTML = `
     <p class="admin-form-error" hidden></p>
     <p class="admin-form-status" hidden></p>
+
+    <div class="admin-form-section">
+      <h2 class="admin-form-section-title">Product Readiness</h2>
+      <ul class="admin-readiness-checklist" id="readiness-checklist"></ul>
+    </div>
 
     <div class="admin-form-section">
       <h2 class="admin-form-section-title">Images</h2>
@@ -164,6 +213,22 @@ export function createProductForm({ categories, product, onSubmit, onDone, onCan
   });
   form.querySelector('#image-manager-mount').appendChild(imageManager.element);
 
+  const readinessList = /** @type {HTMLElement} */ (form.querySelector('#readiness-checklist'));
+  function renderReadinessChecklist() {
+    const draft = readDraftFromForm(form, imageManager);
+    const checks = computeReadinessChecks(draft, { shippingRates });
+    readinessList.innerHTML = checks
+      .map((c) => `<li class="${c.ok ? 'ok' : 'warn'}">${c.ok ? '&#10003;' : '!'} ${escapeHtml(c.label)}${c.ok ? '' : ' missing' + (c.severity === 'blocking' ? ' (required to publish)' : '')}</li>`)
+      .join('');
+  }
+  renderReadinessChecklist();
+  // Click covers the image manager's add/delete/reorder/primary buttons
+  // (type="button", so they don't fire 'change'); input/change covers
+  // every text/select field, including the hidden file input itself.
+  form.addEventListener('input', renderReadinessChecklist);
+  form.addEventListener('change', renderReadinessChecklist);
+  form.addEventListener('click', () => setTimeout(renderReadinessChecklist, 0));
+
   // Auto-suggest the slug from the name, but stop once the user has edited
   // the slug field themselves so we never clobber a manual choice.
   let slugTouched = isEdit;
@@ -227,6 +292,19 @@ export function createProductForm({ categories, product, onSubmit, onDone, onCan
       errorEl.textContent = 'Slug cannot be empty.';
       errorEl.hidden = false;
       return;
+    }
+
+    // Draft/Hidden saves are never blocked — only the Available transition
+    // is gated, and only on fields that are actually required for commerce
+    // to function (see readiness.js). Same rule productTable.js's quick
+    // "Mark Available"/"Publish" actions enforce, read from one place.
+    if (fields.status === 'available') {
+      const blocking = getBlockingIssues(computeReadinessChecks({ ...fields, imageCount: imageManager.getImageCount() }, { shippingRates }));
+      if (blocking.length > 0) {
+        errorEl.textContent = `Can't publish yet — still needed: ${blocking.map((c) => c.label).join(', ')}.`;
+        errorEl.hidden = false;
+        return;
+      }
     }
 
     const submitBtn = /** @type {HTMLButtonElement} */ (form.querySelector('[type="submit"]'));

@@ -435,6 +435,57 @@ a:hover {
     margin-top: 30px;
 }
 
+/* ---------- POLICY PAGES (Shipping / Returns / Privacy / Terms) ---------- */
+.policy-page {
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.policy-page h2 {
+    font-size: 1.1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    color: var(--text-primary);
+}
+
+.policy-page p,
+.policy-page li {
+    font-size: 1rem;
+    line-height: 1.8;
+    color: var(--text-secondary);
+}
+
+.policy-page p {
+    margin-bottom: 18px;
+}
+
+.policy-page ul {
+    margin: 0 0 18px;
+    padding-left: 20px;
+}
+
+.policy-page li {
+    margin-bottom: 8px;
+}
+
+.policy-page section + section {
+    margin-top: 10px;
+}
+
+.policy-divider {
+    width: 60px;
+    height: 1px;
+    background-color: var(--border);
+    margin: 40px 0;
+}
+
+.policy-updated {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 40px;
+}
+
 /* ---------- CONTACT PAGE ---------- */
 .contact-page {
     max-width: 700px;
@@ -908,6 +959,16 @@ a:hover {
     border: 1px solid var(--border);
 }
 
+.specimen-status.pickup-only {
+    color: var(--accent-tertiary);
+    border: 1px solid var(--accent-tertiary);
+}
+
+.specimen-status.special-shipping {
+    color: var(--accent);
+    border: 1px solid var(--accent);
+}
+
 .specimen-status.collection {
     color: var(--accent-tertiary);
     border: 1px solid var(--accent-tertiary);
@@ -1330,6 +1391,25 @@ a:hover {
 }
 
 .footer-link:hover {
+    color: var(--text-primary);
+}
+
+.footer-policy-links {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin-bottom: 20px;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.footer-policy-links a {
+    color: var(--text-secondary);
+}
+
+.footer-policy-links a:hover {
     color: var(--text-primary);
 }
 
@@ -1979,9 +2059,20 @@ a:hover {
     border-color: var(--accent-tertiary);
 }
 
-.specimen-badge.documented {
+.specimen-badge.documented,
+.specimen-badge.available {
     color: var(--accent-secondary);
     border-color: var(--accent-secondary);
+}
+
+.specimen-badge.pickup-only {
+    color: var(--accent-tertiary);
+    border-color: var(--accent-tertiary);
+}
+
+.specimen-badge.special-shipping {
+    color: var(--accent);
+    border-color: var(--accent);
 }
 
 /* 3D Model Viewer */

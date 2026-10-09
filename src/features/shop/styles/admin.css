@@ -209,6 +209,19 @@ body.page-admin {
 .admin-status-sold { color: var(--text-muted); }
 .admin-status-draft { color: var(--accent-tertiary); border-color: var(--accent-tertiary); }
 .admin-status-hidden { color: var(--text-muted); }
+
+.admin-readiness {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.admin-readiness-ready { color: var(--accent-secondary); border-color: var(--accent-secondary); }
+.admin-readiness-needs_info { color: var(--accent); border-color: var(--accent); }
+.admin-readiness-draft { color: var(--text-muted); }
 .admin-status-pending { color: var(--accent-tertiary); border-color: var(--accent-tertiary); }
 .admin-status-paid { color: var(--accent-secondary); border-color: var(--accent-secondary); }
 .admin-status-fulfilled { color: var(--text-muted); }
@@ -237,6 +250,28 @@ body.page-admin {
 
 .admin-actions-cell {
     white-space: nowrap;
+}
+
+/* Readiness checklist */
+.admin-readiness-checklist {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.85rem;
+}
+
+.admin-readiness-checklist li {
+    display: flex;
+    gap: 8px;
+}
+
+.admin-readiness-checklist .ok {
+    color: var(--accent-secondary);
+}
+
+.admin-readiness-checklist .warn {
+    color: var(--accent);
 }
 
 /* Form */

@@ -155,8 +155,15 @@ async function renderSection(section) {
 }
 
 async function renderProductsSection(mount) {
-  const [categories, initialProducts] = await Promise.all([adminListCategories(), adminListProducts()]);
+  const [categories, initialProducts, shippingClasses] = await Promise.all([
+    adminListCategories(),
+    adminListProducts(),
+    adminListShippingClasses(),
+  ]);
   let products = initialProducts;
+  // Readiness's "shippable product has a usable shipping configuration"
+  // check (readiness.js) needs to know which flat rates are actually set.
+  const shippingRates = Object.fromEntries(shippingClasses.map((c) => [c.key, c.flatPriceCents]));
 
   mount.innerHTML = `
     <div class="admin-header">
@@ -209,6 +216,10 @@ async function renderProductsSection(mount) {
             statusEl.textContent = 'Could not save that change. Please try again.';
           }
         },
+        onMessage: (text) => {
+          statusEl.textContent = text;
+        },
+        shippingRates,
       })
     );
   }
@@ -223,6 +234,7 @@ async function renderProductsSection(mount) {
       createProductForm({
         categories,
         product,
+        shippingRates,
         onCancel: () => renderSection('products'),
         onDone: () => renderSection('products'),
         onSubmit: async (fields) => {

@@ -49,6 +49,18 @@
 /field-guide
   Cache-Control: no-cache
 
+/shipping
+  Cache-Control: no-cache
+
+/returns
+  Cache-Control: no-cache
+
+/privacy
+  Cache-Control: no-cache
+
+/terms
+  Cache-Control: no-cache
+
 /src/features/shop/*
   Cache-Control: no-cache
 

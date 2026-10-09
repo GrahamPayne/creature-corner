@@ -18,6 +18,16 @@ async function getLiveCategories() {
   return data || [];
 }
 
+/** Category slugs with at least one publicly-visible (available/sold) product — the Stage 6.75 rule for which filter buttons /shop should show. @returns {Promise<Set<string>>} */
+async function getCategorySlugsWithPublishedProducts() {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data } = await supabase
+    .from('products')
+    .select('category:categories(slug)')
+    .in('status', ['available', 'sold']);
+  return new Set((data || []).map((p) => p.category?.slug).filter(Boolean));
+}
+
 test.describe('Shop page', () => {
   test.beforeEach(async ({ page }) => {
     // networkidle, not just goto()'s default 'load': the product list
@@ -58,15 +68,23 @@ test.describe('Shop page', () => {
     }
   });
 
-  test('category filter buttons reflect whatever categories currently exist in Supabase', async ({ page }) => {
+  test('category filter buttons only show categories with at least one published product (Stage 6.75)', async ({ page }) => {
     // Categories are managed through /admin → Categories (Stage 6.5) and
     // can be renamed/added/removed at any time, so this reads the live
     // list rather than hardcoding names — only "All" (not a DB category,
-    // see components/filterBar.js) is a fixed expectation.
+    // see components/filterBar.js) is a fixed expectation. An empty
+    // category (no published products) must NOT appear as a filter
+    // button on the public shop — it still shows in the admin Categories
+    // screen, just not here.
     await expect(page.getByRole('button', { name: 'All', exact: true })).toBeVisible();
-    const categories = await getLiveCategories();
-    for (const { name } of categories) {
-      await expect(page.getByRole('button', { name })).toBeVisible();
+    const [categories, slugsWithProducts] = await Promise.all([getLiveCategories(), getCategorySlugsWithPublishedProducts()]);
+    for (const { name, slug } of categories) {
+      const button = page.getByRole('button', { name, exact: true });
+      if (slugsWithProducts.has(slug)) {
+        await expect(button).toBeVisible();
+      } else {
+        await expect(button).toHaveCount(0);
+      }
     }
   });
 

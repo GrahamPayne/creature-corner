@@ -2,6 +2,7 @@ import { getSupabaseClient } from '../api/supabaseClient.js';
 import { slugify } from './slug.js';
 import { uniqueImagePath } from './storagePath.js';
 import { resizeImageForUpload } from './imageProcessing.js';
+import { pickPrimaryImage } from '../primaryImage.js';
 
 const IMAGE_BUCKET = 'product-images';
 
@@ -39,6 +40,11 @@ function normalizeRow(row, supabase) {
     quantity: row.quantity,
     shippingClass: row.shipping_class,
     pickupAvailable: row.pickup_available,
+    packedWeightLb: row.packed_weight_lb,
+    packedWeightOz: row.packed_weight_oz,
+    packageLengthIn: row.package_length_in,
+    packageWidthIn: row.package_width_in,
+    packageHeightIn: row.package_height_in,
     featured: row.featured,
     status: row.status,
     createdAt: row.created_at,
@@ -61,6 +67,11 @@ export function toDbPatch(fields) {
     quantity: 'quantity',
     shippingClass: 'shipping_class',
     pickupAvailable: 'pickup_available',
+    packedWeightLb: 'packed_weight_lb',
+    packedWeightOz: 'packed_weight_oz',
+    packageLengthIn: 'package_length_in',
+    packageWidthIn: 'package_width_in',
+    packageHeightIn: 'package_height_in',
     featured: 'featured',
     status: 'status',
   };
@@ -274,6 +285,11 @@ export async function adminDuplicateProduct(id) {
     quantity: original.quantity,
     shippingClass: original.shippingClass,
     pickupAvailable: original.pickupAvailable,
+    packedWeightLb: original.packedWeightLb,
+    packedWeightOz: original.packedWeightOz,
+    packageLengthIn: original.packageLengthIn,
+    packageWidthIn: original.packageWidthIn,
+    packageHeightIn: original.packageHeightIn,
     featured: false,
     status: 'draft',
   });
@@ -292,4 +308,152 @@ export async function adminUpdateShippingRate(key, cents) {
   const supabase = await client();
   const { error } = await supabase.from('shipping_classes').update({ flat_price_cents: cents }).eq('key', key);
   if (error) throw error;
+}
+
+function normalizeCategory(row) {
+  return { id: row.id, slug: row.slug, name: row.name, sortOrder: row.sort_order };
+}
+
+/**
+ * Categories plus how many products currently reference each one (needed
+ * to safely block deletion). Two queries, counted client-side, rather than
+ * a Postgres-side GROUP BY — simpler to keep consistent with the rest of
+ * this file's plain select/insert/update calls.
+ * @returns {Promise<{id:string, slug:string, name:string, sortOrder:number, productCount:number}[]>}
+ */
+export async function adminListCategoriesWithCounts() {
+  const supabase = await client();
+  const [{ data: categories, error: catError }, { data: products, error: prodError }] = await Promise.all([
+    supabase.from('categories').select('*').order('sort_order'),
+    supabase.from('products').select('category_id'),
+  ]);
+  if (catError) throw catError;
+  if (prodError) throw prodError;
+
+  const counts = {};
+  for (const p of products) {
+    if (p.category_id) counts[p.category_id] = (counts[p.category_id] || 0) + 1;
+  }
+  return categories.map((row) => ({ ...normalizeCategory(row), productCount: counts[row.id] || 0 }));
+}
+
+/** @param {{name: string, slug: string}} fields */
+export async function adminCreateCategory({ name, slug }) {
+  const supabase = await client();
+  const { data: last, error: lastError } = await supabase
+    .from('categories')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1);
+  if (lastError) throw lastError;
+  const sortOrder = last.length > 0 ? last[0].sort_order + 1 : 0;
+
+  const { data, error } = await supabase.from('categories').insert({ name, slug, sort_order: sortOrder }).select().single();
+  if (error) {
+    if (error.code === '23505') throw new Error('That slug is already in use — try another.');
+    throw error;
+  }
+  return normalizeCategory(data);
+}
+
+/** @param {string} id @param {{name?: string, slug?: string}} fields */
+export async function adminUpdateCategory(id, fields) {
+  const supabase = await client();
+  const patch = {};
+  if (fields.name !== undefined) patch.name = fields.name;
+  if (fields.slug !== undefined) patch.slug = fields.slug;
+
+  const { data, error } = await supabase.from('categories').update(patch).eq('id', id).select().single();
+  if (error) {
+    if (error.code === '23505') throw new Error('That slug is already in use — try another.');
+    throw error;
+  }
+  return normalizeCategory(data);
+}
+
+/** Renumbers sort_order 0..N-1 to match orderedCategoryIds — same pattern as adminReorderImages above. @param {string[]} orderedCategoryIds */
+export async function adminReorderCategories(orderedCategoryIds) {
+  const supabase = await client();
+  const results = await Promise.all(
+    orderedCategoryIds.map((id, index) => supabase.from('categories').update({ sort_order: index }).eq('id', id))
+  );
+  const failed = results.find((r) => r.error);
+  if (failed) throw failed.error;
+}
+
+/**
+ * Blocks deletion (rather than deleting and orphaning products, or
+ * cascading silently) when any product still references this category.
+ * @param {string} id
+ */
+export async function adminDeleteCategory(id) {
+  const supabase = await client();
+  const { count, error: countError } = await supabase
+    .from('products')
+    .select('id', { count: 'exact', head: true })
+    .eq('category_id', id);
+  if (countError) throw countError;
+  if (count > 0) {
+    throw new Error(`This category is currently used by ${count} product${count === 1 ? '' : 's'} and cannot be deleted.`);
+  }
+
+  const { error } = await supabase.from('categories').delete().eq('id', id);
+  if (error) throw error;
+}
+
+const ORDER_SELECT = `
+  *,
+  items:order_items(
+    id, product_id, product_name, unit_price_cents, quantity,
+    product:products(slug, images:product_images(storage_path, is_primary, sort_order))
+  )
+`;
+
+/** "Needs fulfillment" (paid, not yet fulfilled) is intentionally not its own status — it's derived here, not stored, so Stage 7/8 never has to migrate a redundant column. */
+export function deriveNeedsFulfillment(order) {
+  return order.status === 'paid';
+}
+
+function normalizeOrder(row, supabase) {
+  const items = (row.items || []).map((item) => {
+    const images = (item.product?.images || [])
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((img) => ({ url: supabase.storage.from('product-images').getPublicUrl(img.storage_path).data.publicUrl, isPrimary: img.is_primary }));
+    const thumbnail = pickPrimaryImage(images);
+    return {
+      id: item.id,
+      productId: item.product_id,
+      productSlug: item.product?.slug ?? null,
+      name: item.product_name,
+      unitPriceCents: item.unit_price_cents,
+      quantity: item.quantity,
+      lineTotalCents: item.unit_price_cents * item.quantity,
+      thumbnailUrl: thumbnail?.url ?? null,
+    };
+  });
+
+  return {
+    id: row.id,
+    email: row.email,
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone,
+    status: row.status,
+    fulfillmentType: row.fulfillment_type,
+    shippingAddress: row.shipping_address,
+    subtotalCents: row.subtotal_cents,
+    shippingCents: row.shipping_cents,
+    totalCents: row.total_cents,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    items,
+  };
+}
+
+/** @returns {Promise<ReturnType<typeof normalizeOrder>[]>} */
+export async function adminListOrders() {
+  const supabase = await client();
+  const { data, error } = await supabase.from('orders').select(ORDER_SELECT).order('created_at', { ascending: false });
+  if (error) throw error;
+  return data.map((row) => normalizeOrder(row, supabase));
 }

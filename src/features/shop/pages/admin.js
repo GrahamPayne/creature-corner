@@ -9,13 +9,29 @@ import {
   adminDuplicateProduct,
   adminListShippingClasses,
   adminUpdateShippingRate,
+  adminListCategoriesWithCounts,
+  adminCreateCategory,
+  adminUpdateCategory,
+  adminReorderCategories,
+  adminDeleteCategory,
+  adminListOrders,
 } from '../admin/api.js';
 import { createProductForm } from '../admin/productForm.js';
 import { createProductTable } from '../admin/productTable.js';
 import { createShippingForm } from '../admin/shippingForm.js';
+import { createCategoryManager } from '../admin/categoryManager.js';
+import { createOrdersTable } from '../admin/ordersTable.js';
+import { createOrderDetail } from '../admin/orderDetail.js';
 import { escapeHtml } from '../dom.js';
 
 const root = document.getElementById('admin-root');
+
+const NAV_SECTIONS = [
+  ['products', 'Products'],
+  ['categories', 'Categories'],
+  ['shipping', 'Shipping'],
+  ['orders', 'Orders'],
+];
 
 function renderNotConfigured() {
   root.innerHTML = `
@@ -63,7 +79,7 @@ function renderLogin({ error } = {}) {
       renderUnauthorized();
       return;
     }
-    renderDashboard();
+    renderShell('products');
   });
 }
 
@@ -81,54 +97,86 @@ function renderUnauthorized() {
   });
 }
 
-function renderError(message) {
-  root.innerHTML = `
-    <div class="admin-panel">
-      <h1>Admin</h1>
-      <p class="admin-notice admin-notice-error">${escapeHtml(message)}</p>
-    </div>
+/**
+ * Admin-only navigation (Products / Categories / Shipping / Orders) — lives
+ * entirely inside #admin-root once logged in. Never touches the public
+ * site's own nav (see tests/shop/e2e/admin.spec.js's "not linked from the
+ * public nav" assertion, which this must keep passing).
+ * @param {string} active
+ */
+function renderNav(active) {
+  return `
+    <nav class="admin-nav">
+      ${NAV_SECTIONS.map(
+        ([key, label]) => `<a href="#" class="admin-nav-link${active === key ? ' admin-nav-link-active' : ''}" data-section="${key}">${label}</a>`
+      ).join('')}
+      <button type="button" class="admin-btn admin-nav-signout" id="signout-btn">Sign Out</button>
+    </nav>
   `;
 }
 
-async function renderDashboard() {
+/** Top-level shell: nav + a content mount that each section renders into. @param {string} section */
+async function renderShell(section) {
   root.innerHTML = `
     <div class="admin-panel">
-      <div class="admin-header">
-        <h1>Products</h1>
-        <div class="admin-header-actions">
-          <button type="button" class="admin-btn admin-btn-primary" id="add-product-btn">Add Product</button>
-          <button type="button" class="admin-btn" id="shipping-settings-btn">Shipping Settings</button>
-          <button type="button" class="admin-btn" id="signout-btn">Sign Out</button>
-        </div>
-      </div>
-      <p id="admin-status" class="admin-notice">Loading products&hellip;</p>
-      <div id="admin-table-mount"></div>
+      <div id="admin-nav-mount"></div>
+      <div id="admin-section-mount"></div>
     </div>
   `;
+  await renderSection(section);
+}
 
+/** @param {string} section */
+async function renderSection(section) {
+  const navMount = document.getElementById('admin-nav-mount');
+  navMount.innerHTML = renderNav(section);
+  navMount.querySelectorAll('[data-section]').forEach((link) =>
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      renderSection(link.getAttribute('data-section'));
+    })
+  );
   document.getElementById('signout-btn').addEventListener('click', async () => {
     await signOut();
     renderLogin();
   });
 
-  let categories;
-  let products;
+  const mount = document.getElementById('admin-section-mount');
+  mount.innerHTML = '<p class="admin-notice">Loading&hellip;</p>';
   try {
-    [categories, products] = await Promise.all([adminListCategories(), adminListProducts()]);
+    if (section === 'categories') await renderCategoriesSection(mount);
+    else if (section === 'shipping') await renderShippingSection(mount);
+    else if (section === 'orders') await renderOrdersSection(mount);
+    else await renderProductsSection(mount);
   } catch (err) {
-    console.error('Failed to load admin data', err);
-    renderError('Could not load products right now. Please refresh and try again.');
-    return;
+    console.error(`Failed to load admin section "${section}"`, err);
+    mount.innerHTML = '<p class="admin-notice admin-notice-error">Could not load this section. Please refresh and try again.</p>';
   }
+}
 
-  const statusEl = document.getElementById('admin-status');
-  const tableMount = document.getElementById('admin-table-mount');
+async function renderProductsSection(mount) {
+  const [categories, initialProducts] = await Promise.all([adminListCategories(), adminListProducts()]);
+  let products = initialProducts;
+
+  mount.innerHTML = `
+    <div class="admin-header">
+      <h1>Products</h1>
+      <div class="admin-header-actions">
+        <button type="button" class="admin-btn admin-btn-primary" id="add-product-btn">Add Product</button>
+      </div>
+    </div>
+    <p id="admin-status" class="admin-notice">Loading products&hellip;</p>
+    <div id="admin-table-mount"></div>
+  `;
+
+  const statusEl = mount.querySelector('#admin-status');
+  const tableMount = mount.querySelector('#admin-table-mount');
 
   function refreshTable() {
     statusEl.textContent = `${products.length} product${products.length === 1 ? '' : 's'}`;
     tableMount.replaceChildren(
       createProductTable(products, {
-        onEdit: (id) => showForm(categories, products.find((p) => p.id === id)),
+        onEdit: (id) => showForm(products.find((p) => p.id === id)),
         onDuplicate: async (id) => {
           try {
             const created = await adminDuplicateProduct(id);
@@ -165,61 +213,73 @@ async function renderDashboard() {
     );
   }
 
-  function showForm(categories, product) {
-    root.querySelector('.admin-panel').innerHTML = `
+  function showForm(product) {
+    mount.innerHTML = `
       <h1>${product ? 'Edit Product' : 'Add Product'}</h1>
       <div id="form-mount"></div>
     `;
-    const formMount = document.getElementById('form-mount');
+    const formMount = mount.querySelector('#form-mount');
     formMount.appendChild(
       createProductForm({
         categories,
         product,
-        onCancel: () => renderDashboard(),
-        onDone: () => renderDashboard(),
+        onCancel: () => renderSection('products'),
+        onDone: () => renderSection('products'),
         onSubmit: async (fields) => {
           if (product) {
-            const updated = await adminUpdateProduct(product.id, fields);
-            products = products.map((p) => (p.id === product.id ? updated : p));
-            return updated;
+            return adminUpdateProduct(product.id, fields);
           }
-          const created = await adminCreateProduct(fields);
-          products.unshift(created);
-          return created;
+          return adminCreateProduct(fields);
         },
       })
     );
   }
 
-  async function showShippingSettings() {
-    root.querySelector('.admin-panel').innerHTML = `
-      <h1>Shipping Settings</h1>
-      <div id="shipping-form-mount"></div>
-    `;
-    const mount = document.getElementById('shipping-form-mount');
-    let classes;
-    try {
-      classes = await adminListShippingClasses();
-    } catch (err) {
-      console.error('Failed to load shipping classes', err);
-      mount.innerHTML = '<p class="admin-notice admin-notice-error">Could not load shipping settings. Please try again.</p>';
-      return;
-    }
-    mount.appendChild(
-      createShippingForm({
-        classes,
-        onBack: () => renderDashboard(),
-        onSave: async (rates) => {
-          await Promise.all(Object.entries(rates).map(([key, cents]) => adminUpdateShippingRate(key, cents)));
-        },
-      })
-    );
-  }
-
-  document.getElementById('add-product-btn').addEventListener('click', () => showForm(categories));
-  document.getElementById('shipping-settings-btn').addEventListener('click', () => showShippingSettings());
-
+  mount.querySelector('#add-product-btn').addEventListener('click', () => showForm());
   refreshTable();
+}
+
+async function renderShippingSection(mount) {
+  mount.innerHTML = '<h1>Shipping Settings</h1><div id="shipping-form-mount"></div>';
+  const formMount = mount.querySelector('#shipping-form-mount');
+  const classes = await adminListShippingClasses();
+  formMount.appendChild(
+    createShippingForm({
+      classes,
+      onBack: () => renderSection('products'),
+      onSave: async (rates) => {
+        await Promise.all(Object.entries(rates).map(([key, cents]) => adminUpdateShippingRate(key, cents)));
+      },
+    })
+  );
+}
+
+async function renderCategoriesSection(mount) {
+  mount.innerHTML = '<h1>Categories</h1><p class="admin-notice">Order here also controls the category filter order on /shop.</p><div id="category-mount"></div>';
+  const categories = await adminListCategoriesWithCounts();
+  mount.querySelector('#category-mount').appendChild(
+    createCategoryManager(categories, {
+      onCreate: (fields) => adminCreateCategory(fields),
+      onRename: (id, fields) => adminUpdateCategory(id, fields),
+      onReorder: (orderedIds) => adminReorderCategories(orderedIds),
+      onDelete: (id) => adminDeleteCategory(id),
+    })
+  );
+}
+
+async function renderOrdersSection(mount) {
+  mount.innerHTML = '<h1>Orders</h1><div id="orders-mount"></div>';
+  const ordersMount = mount.querySelector('#orders-mount');
+  const orders = await adminListOrders();
+
+  function showList() {
+    ordersMount.replaceChildren(createOrdersTable(orders, { onSelect: (id) => showDetail(id) }));
+  }
+  function showDetail(id) {
+    const order = orders.find((o) => o.id === id);
+    ordersMount.replaceChildren(createOrderDetail(order, { onBack: showList }));
+  }
+  showList();
 }
 
 async function init() {
@@ -242,7 +302,7 @@ async function init() {
     return;
   }
 
-  renderDashboard();
+  renderShell('products');
 }
 
 init();

@@ -8,6 +8,14 @@
 /*.html
   Cache-Control: no-cache
 
+# Header rules match the REQUEST path, not the file actually served — so
+# `/*.html` above does NOT cover a clean URL like `/admin` (confirmed
+# against Cloudflare's own docs). Every clean-URL page needs its own
+# explicit entry here, or it falls back to the platform default and can
+# go stale after a deploy even though the JS it loads is already correct.
+/
+  Cache-Control: no-cache
+
 /shop
   Cache-Control: no-cache
 
@@ -15,6 +23,30 @@
   Cache-Control: no-cache
 
 /product/*
+  Cache-Control: no-cache
+
+/admin
+  Cache-Control: no-cache
+
+/cart
+  Cache-Control: no-cache
+
+/about
+  Cache-Control: no-cache
+
+/contact
+  Cache-Control: no-cache
+
+/gallery
+  Cache-Control: no-cache
+
+/commissions
+  Cache-Control: no-cache
+
+/exhibition
+  Cache-Control: no-cache
+
+/field-guide
   Cache-Control: no-cache
 
 /src/features/shop/*

@@ -2,7 +2,8 @@ import { getProductsByIds, getShippingClasses } from '../api/products.js';
 import { readCart, removeFromCart, updateCartQuantity } from '../cart/cart.js';
 import { syncNavBadge } from '../cart/navBadge.js';
 import { determineFulfillmentOptions } from '../cart/shippingRules.js';
-import { computeSubtotalCents, computeShippingCents, computeTotalCents } from '../cart/cartTotals.js';
+import { computeSubtotalCents, computeTotalCents } from '../cart/cartTotals.js';
+import { getShippingQuote } from '../shipping/shippingProvider.js';
 import { pickPrimaryImage } from '../primaryImage.js';
 import { formatCents } from '../money.js';
 import { escapeHtml } from '../dom.js';
@@ -115,8 +116,8 @@ function render(entries, products, shippingClasses) {
   const rateByClass = Object.fromEntries(shippingClasses.map((c) => [c.key, c.flatPriceCents]));
   const subtotalCents = computeSubtotalCents(availableLines.map((l) => ({ priceCents: l.product.priceCents, quantity: l.quantity })));
   const shipping = conflict || availableLines.length === 0
-    ? { cents: null, configured: false, shippingClass: null }
-    : computeShippingCents(fulfillmentInput, formState.fulfillment, rateByClass);
+    ? { cents: null, configured: false, shippingClass: null, manualQuote: false }
+    : getShippingQuote({ items: fulfillmentInput, fulfillment: formState.fulfillment, rateByClass });
   const totalCents = computeTotalCents(subtotalCents, shipping.cents);
 
   const canContinue =
@@ -158,9 +159,11 @@ function render(entries, products, shippingClasses) {
           <span>${formState.fulfillment === 'pickup' ? 'Local Pickup' : 'Shipping'}</span>
           <span>${shipping.configured ? formatCents(shipping.cents) : 'Not yet configured'}</span>
         </div>
-        ${shipping.shippingClass ? `<p class="cart-shipping-note">Based on the largest item in your cart: ${SHIPPING_LABELS[shipping.shippingClass] || shipping.shippingClass}.</p>` : ''}
+        ${shipping.shippingClass && !shipping.manualQuote ? `<p class="cart-shipping-note">Based on the largest item in your cart: ${SHIPPING_LABELS[shipping.shippingClass] || shipping.shippingClass}.</p>` : ''}
         <div class="cart-summary-row cart-summary-total"><span>Total</span><span>${totalCents === null ? '—' : formatCents(totalCents)}</span></div>
-        ${!shipping.configured ? '<p class="cart-notice cart-notice-error">Shipping rates haven’t been set yet — checkout can’t continue until they are.</p>' : ''}
+        ${shipping.manualQuote
+          ? '<p class="cart-notice cart-notice-error">One or more items in your cart need a custom shipping quote — we’ll follow up with pricing before anything is charged.</p>'
+          : !shipping.configured ? '<p class="cart-notice cart-notice-error">Shipping rates haven’t been set yet — checkout can’t continue until they are.</p>' : ''}
 
         <button type="button" class="btn btn-primary cart-continue-btn" id="continue-to-payment-btn" ${canContinue ? '' : 'disabled'}>
           Continue to Payment

@@ -20,6 +20,8 @@ local-dev, and deploy sections get added as those stages land.
    `shipping_classes`, `orders`, `order_items`, and `admins` tables, plus
    the Row Level Security policies that keep the public site read-only.
 3. It's safe to re-run — repeated runs skip anything already created.
+4. Run each file in `supabase/migrations/`, in order, the same way (SQL
+   Editor → New query → paste → run). Each one is also safe to re-run.
 
 ## 3. Create the Storage bucket
 
@@ -146,6 +148,31 @@ the public site) since it's a working tool, not a page visitors see.
 
 If `/admin` still shows "Supabase isn't connected yet", steps 1–6 above
 haven't been completed/sent to me yet.
+
+### Admin navigation (Stage 6.5)
+
+`/admin` now has its own nav (Products / Categories / Shipping / Orders) —
+private to the logged-in admin panel, never added to the public site nav.
+
+- **Products** — unchanged from before.
+- **Categories** — add, rename, edit slug, reorder (↑/↓), and delete
+  categories. Deleting a category that's still used by any product is
+  blocked with a message telling you how many products use it; remove or
+  recategorize them first. Reorder here also controls the category filter
+  button order on the public `/shop` page.
+- **Shipping** — unchanged flat-rate settings from Stage 6. This is the
+  fallback shipping system; it keeps working as-is until EasyPost is
+  connected (see `docs/SHIPPING_ARCHITECTURE.md`).
+- **Orders** — shows "No orders yet." until Stage 7 adds real checkout.
+  Filters (Needs Fulfillment / Shipping / Local Pickup / Fulfilled /
+  Cancelled / Refunded) are ready for when real orders exist.
+
+Add/Edit Product also has two new sections: **Fulfillment** (a single
+mode select — Shipping + Local Pickup / Shipping Only / Local Pickup Only
+/ Special Shipping - Manual Quote — replacing the old separate shipping
+class + pickup checkbox) and **Packed Shipping Info** (final packed box
+weight/dimensions, not the artwork's own dimensions — this is what a
+future EasyPost rate lookup will use).
 
 ## Known local-dev quirk: product URLs
 

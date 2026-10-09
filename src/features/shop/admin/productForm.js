@@ -2,14 +2,15 @@ import { slugify } from './slug.js';
 import { escapeHtml } from '../dom.js';
 import { createImageManager } from './imageManager.js';
 import { uploadProductImage } from './api.js';
-
-const SHIPPING_CLASSES = [
-  ['small', 'Small'],
-  ['medium', 'Medium'],
-  ['large', 'Large'],
-  ['oversized', 'Oversized'],
-  ['pickup_only', 'Local pickup only'],
-];
+import {
+  FULFILLMENT_MODES,
+  PACKAGE_SIZES,
+  deriveFulfillmentMode,
+  fulfillmentNeedsPackageSize,
+  fulfillmentRequiresPackedData,
+  resolveFulfillment,
+  validatePackedShipping,
+} from './fulfillment.js';
 
 const STATUSES = [
   ['draft', 'Draft'],
@@ -33,11 +34,17 @@ export function createProductForm({ categories, product, onSubmit, onDone, onCan
   const categoryOptions = categories
     .map((c) => `<option value="${c.id}" ${product?.category?.id === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`)
     .join('');
-  const shippingOptions = SHIPPING_CLASSES
-    .map(([key, label]) => `<option value="${key}" ${product?.shippingClass === key ? 'selected' : ''}>${label}</option>`)
-    .join('');
   const statusOptions = STATUSES
     .map(([key, label]) => `<option value="${key}" ${(product?.status ?? 'draft') === key ? 'selected' : ''}>${label}</option>`)
+    .join('');
+
+  const initialMode = deriveFulfillmentMode(product);
+  const initialPackageSize = PACKAGE_SIZES.some(([key]) => key === product?.shippingClass) ? product.shippingClass : 'medium';
+  const fulfillmentOptions = FULFILLMENT_MODES
+    .map(([key, label]) => `<option value="${key}" ${initialMode === key ? 'selected' : ''}>${label}</option>`)
+    .join('');
+  const packageSizeOptions = PACKAGE_SIZES
+    .map(([key, label]) => `<option value="${key}" ${initialPackageSize === key ? 'selected' : ''}>${label}</option>`)
     .join('');
 
   form.innerHTML = `
@@ -88,14 +95,43 @@ export function createProductForm({ categories, product, onSubmit, onDone, onCan
       <input type="number" name="quantity" required min="0" step="1" value="${product?.quantity ?? 1}">
     </label>
 
-    <label>Shipping class
-      <select name="shippingClass">${shippingOptions}</select>
-    </label>
+    <div class="admin-form-section">
+      <h2 class="admin-form-section-title">Fulfillment</h2>
+      <label>Fulfillment mode
+        <select name="fulfillmentMode">${fulfillmentOptions}</select>
+      </label>
+      <label id="package-size-field" ${fulfillmentNeedsPackageSize(initialMode) ? '' : 'hidden'}>Package size
+        <select name="packageSize">${packageSizeOptions}</select>
+      </label>
+      <p class="admin-notice" id="special-quote-note" ${initialMode === 'special_quote' ? '' : 'hidden'}>
+        This product will never receive an automatic shipping price — the cart shows a manual-quote notice
+        and checkout stays blocked until you follow up with the customer directly.
+      </p>
+    </div>
 
-    <label class="admin-form-checkbox">
-      <input type="checkbox" name="pickupAvailable" ${product?.pickupAvailable ? 'checked' : ''}>
-      Local pickup available
-    </label>
+    <div class="admin-form-section">
+      <h2 class="admin-form-section-title">Packed Shipping Info</h2>
+      <p class="admin-notice">Enter the final packed box dimensions and weight, not the artwork dimensions.</p>
+      <div class="admin-form-row">
+        <label>Weight — lb
+          <input type="number" name="packedWeightLb" min="0" step="0.1" value="${product?.packedWeightLb ?? 0}">
+        </label>
+        <label>Weight — oz
+          <input type="number" name="packedWeightOz" min="0" max="15" step="1" value="${product?.packedWeightOz ?? 0}">
+        </label>
+      </div>
+      <div class="admin-form-row">
+        <label>Length (in)
+          <input type="number" name="packageLengthIn" min="0" step="0.1" value="${product?.packageLengthIn ?? ''}">
+        </label>
+        <label>Width (in)
+          <input type="number" name="packageWidthIn" min="0" step="0.1" value="${product?.packageWidthIn ?? ''}">
+        </label>
+        <label>Height (in)
+          <input type="number" name="packageHeightIn" min="0" step="0.1" value="${product?.packageHeightIn ?? ''}">
+        </label>
+      </div>
+    </div>
 
     <label class="admin-form-checkbox">
       <input type="checkbox" name="featured" ${product?.featured ? 'checked' : ''}>
@@ -138,10 +174,38 @@ export function createProductForm({ categories, product, onSubmit, onDone, onCan
 
   form.querySelector('[data-action="cancel"]').addEventListener('click', onCancel);
 
+  const fulfillmentSelect = /** @type {HTMLSelectElement} */ (form.elements.namedItem('fulfillmentMode'));
+  const packageSizeField = form.querySelector('#package-size-field');
+  const specialQuoteNote = form.querySelector('#special-quote-note');
+  fulfillmentSelect.addEventListener('change', () => {
+    packageSizeField.toggleAttribute('hidden', !fulfillmentNeedsPackageSize(fulfillmentSelect.value));
+    specialQuoteNote.toggleAttribute('hidden', fulfillmentSelect.value !== 'special_quote');
+  });
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorEl.hidden = true;
     const data = new FormData(form);
+    const fulfillmentMode = String(data.get('fulfillmentMode'));
+    const { shippingClass, pickupAvailable } = resolveFulfillment(fulfillmentMode, String(data.get('packageSize') || 'medium'));
+
+    const packedLengthRaw = String(data.get('packageLengthIn') || '');
+    const packedWidthRaw = String(data.get('packageWidthIn') || '');
+    const packedHeightRaw = String(data.get('packageHeightIn') || '');
+    const packed = {
+      packedWeightLb: Number(data.get('packedWeightLb') || 0),
+      packedWeightOz: Number(data.get('packedWeightOz') || 0),
+      packageLengthIn: packedLengthRaw === '' ? null : Number(packedLengthRaw),
+      packageWidthIn: packedWidthRaw === '' ? null : Number(packedWidthRaw),
+      packageHeightIn: packedHeightRaw === '' ? null : Number(packedHeightRaw),
+    };
+    const packedError = validatePackedShipping(packed, { requirePositive: fulfillmentRequiresPackedData(fulfillmentMode) });
+    if (packedError) {
+      errorEl.textContent = packedError;
+      errorEl.hidden = false;
+      return;
+    }
+
     const fields = {
       name: String(data.get('name') || '').trim(),
       slug: slugify(String(data.get('slug') || '')),
@@ -152,8 +216,9 @@ export function createProductForm({ categories, product, onSubmit, onDone, onCan
       dimensions: String(data.get('dimensions') || '').trim(),
       materials: String(data.get('materials') || '').trim(),
       quantity: Number(data.get('quantity')),
-      shippingClass: String(data.get('shippingClass')),
-      pickupAvailable: data.get('pickupAvailable') === 'on',
+      shippingClass,
+      pickupAvailable,
+      ...packed,
       featured: data.get('featured') === 'on',
       status: String(data.get('status')),
     };

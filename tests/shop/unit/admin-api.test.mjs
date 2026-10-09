@@ -15,6 +15,11 @@ test('toDbPatch maps every camelCase product field to its snake_case column', ()
     quantity: 2,
     shippingClass: 'small',
     pickupAvailable: true,
+    packedWeightLb: 1,
+    packedWeightOz: 8,
+    packageLengthIn: 10,
+    packageWidthIn: 8,
+    packageHeightIn: 6,
     featured: false,
     status: 'draft',
   });
@@ -31,6 +36,11 @@ test('toDbPatch maps every camelCase product field to its snake_case column', ()
     quantity: 2,
     shipping_class: 'small',
     pickup_available: true,
+    packed_weight_lb: 1,
+    packed_weight_oz: 8,
+    package_length_in: 10,
+    package_width_in: 8,
+    package_height_in: 6,
     featured: false,
     status: 'draft',
   });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getSupabaseClient } from '../../../src/features/shop/api/supabaseClient.js';
-import { getProducts } from '../../../src/features/shop/api/products.js';
+import { getProducts, getCategories } from '../../../src/features/shop/api/products.js';
 
 // Live security tests against the real, connected Supabase project, using
 // the public anon/publishable client with NO admin session — exactly what
@@ -80,6 +80,41 @@ test('unauthenticated client cannot upload to the product-images bucket', async 
     .from('product-images')
     .upload(`products/rls-test/${Date.now()}.webp`, blob);
   assert.ok(error, 'expected an RLS error but the upload succeeded');
+});
+
+test('unauthenticated client cannot insert a category', async () => {
+  const { error } = await supabase.from('categories').insert({ slug: `rls-test-${Date.now()}`, name: 'RLS Test Category' });
+  assert.ok(error, 'expected an RLS error but the insert succeeded');
+});
+
+test('unauthenticated client cannot rename an existing category (Stage 6.5 category management)', async (t) => {
+  const categories = await getCategories();
+  if (categories.length === 0) {
+    t.skip('no categories exist to test a rename against');
+    return;
+  }
+  const target = categories[0];
+
+  await supabase.from('categories').update({ name: 'RLS Test Intruder Rename' }).eq('slug', target.slug);
+
+  const after = await getCategories();
+  const unchanged = after.find((c) => c.slug === target.slug);
+  assert.ok(unchanged, 'category disappeared entirely, which would also be a bug');
+  assert.equal(unchanged.name, target.name);
+});
+
+test('unauthenticated client cannot delete a category', async (t) => {
+  const categories = await getCategories();
+  if (categories.length === 0) {
+    t.skip('no categories exist to test a delete against');
+    return;
+  }
+  const target = categories[0];
+
+  await supabase.from('categories').delete().eq('slug', target.slug);
+
+  const after = await getCategories();
+  assert.ok(after.some((c) => c.slug === target.slug), 'category was deleted by an unauthenticated client');
 });
 
 test('unauthenticated client cannot insert a product_images row', async (t) => {

@@ -471,8 +471,9 @@ a:hover {
 }
 
 .contact-social-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 16px;
 }
 
@@ -481,6 +482,8 @@ a:hover {
     flex-direction: column;
     align-items: center;
     gap: 10px;
+    flex: 1 1 200px;
+    max-width: 260px;
     padding: 30px 20px;
     background-color: var(--bg-card);
     border: 1px solid var(--border);
@@ -1677,11 +1680,9 @@ a:hover {
     }
 
     /* Contact page mobile */
-    .contact-social-grid {
-        grid-template-columns: 1fr;
-    }
-
     .contact-social-link {
+        flex: 1 1 100%;
+        max-width: 320px;
         padding: 24px 20px;
     }
 

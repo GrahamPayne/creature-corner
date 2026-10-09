@@ -4,19 +4,23 @@ import { getCategories, getProducts, getProductBySlug } from '../../../src/featu
 
 // Live integration tests against the real, connected Supabase project
 // (src/features/shop/api/config.js has real credentials — see
-// docs/SHOP_SETUP.md). Categories/shipping classes are stable seed data
-// from supabase/schema.sql; products are managed through /admin and can
-// change at any time, so these deliberately don't assert fixed counts or
-// specific product content — only the invariants that must always hold
-// regardless of what's currently in the table (most importantly, that RLS
-// is doing its job: only published products are ever returned here).
+// docs/SHOP_SETUP.md). Products are managed through /admin and can change
+// at any time; since Stage 6.5 added category management (add/rename/
+// reorder/delete), categories are no longer a fixed closed set either —
+// so these deliberately don't assert fixed counts or specific content,
+// only the invariants that must always hold regardless of what's
+// currently in the table (most importantly, that RLS is doing its job:
+// only published products are ever returned here).
 
-test('getCategories returns the 5 categories seeded by supabase/schema.sql', async () => {
+test('getCategories returns a non-empty list of well-formed categories, in sort order', async () => {
   const categories = await getCategories();
-  assert.equal(categories.length, 5);
-  for (const slug of ['original-art', 'plants', 'masks', 'prints', 'small-stuff']) {
-    assert.ok(categories.some((c) => c.slug === slug), `missing category "${slug}"`);
+  assert.ok(categories.length > 0, 'expected at least one category to exist');
+  for (const c of categories) {
+    assert.ok(c.slug, `category "${c.name}" has no slug`);
+    assert.ok(c.name, `category "${c.slug}" has no name`);
   }
+  const slugs = categories.map((c) => c.slug);
+  assert.equal(new Set(slugs).size, slugs.length, `duplicate category slugs: ${slugs}`);
 });
 
 test('getProducts only ever returns published (available/sold) products', async () => {

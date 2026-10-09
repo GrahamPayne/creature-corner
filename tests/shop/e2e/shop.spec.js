@@ -6,6 +6,17 @@
 // only run when supabase/seed-sample-products.sql has been applied (they
 // skip themselves with a clear reason otherwise).
 const { test, expect } = require('@playwright/test');
+const { createClient } = require('@supabase/supabase-js');
+
+const SUPABASE_URL = 'https://qpnqrtcsxtcszmessbvx.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_ikmAu1n0PRFJgXjrOmvfog_3UBV57Km';
+
+/** @returns {Promise<{slug:string, name:string}[]>} */
+async function getLiveCategories() {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data } = await supabase.from('categories').select('slug, name').order('sort_order');
+  return data || [];
+}
 
 test.describe('Shop page', () => {
   test.beforeEach(async ({ page }) => {
@@ -47,9 +58,14 @@ test.describe('Shop page', () => {
     }
   });
 
-  test('category filter buttons reflect the 5 seeded categories', async ({ page }) => {
+  test('category filter buttons reflect whatever categories currently exist in Supabase', async ({ page }) => {
+    // Categories are managed through /admin → Categories (Stage 6.5) and
+    // can be renamed/added/removed at any time, so this reads the live
+    // list rather than hardcoding names — only "All" (not a DB category,
+    // see components/filterBar.js) is a fixed expectation.
     await expect(page.getByRole('button', { name: 'All', exact: true })).toBeVisible();
-    for (const name of ['Original Art', 'Plants', 'Masks', 'Prints', 'Small Stuff']) {
+    const categories = await getLiveCategories();
+    for (const { name } of categories) {
       await expect(page.getByRole('button', { name })).toBeVisible();
     }
   });

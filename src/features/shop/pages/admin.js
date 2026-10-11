@@ -16,10 +16,18 @@ import {
   adminDeleteCategory,
   adminListOrders,
 } from '../admin/api.js';
+import {
+  adminListGalleryItems,
+  adminUpdateGalleryItem,
+  adminReorderGalleryItems,
+  uploadGalleryImage,
+  adminDeleteGalleryItem,
+} from '../admin/galleryApi.js';
 import { createProductForm } from '../admin/productForm.js';
 import { createProductTable } from '../admin/productTable.js';
 import { createShippingForm } from '../admin/shippingForm.js';
 import { createCategoryManager } from '../admin/categoryManager.js';
+import { createGalleryManager } from '../admin/galleryManager.js';
 import { createOrdersTable } from '../admin/ordersTable.js';
 import { createOrderDetail } from '../admin/orderDetail.js';
 import { escapeHtml } from '../dom.js';
@@ -28,6 +36,7 @@ const root = document.getElementById('admin-root');
 
 const NAV_SECTIONS = [
   ['products', 'Products'],
+  ['gallery', 'Gallery'],
   ['categories', 'Categories'],
   ['shipping', 'Shipping'],
   ['orders', 'Orders'],
@@ -144,7 +153,8 @@ async function renderSection(section) {
   const mount = document.getElementById('admin-section-mount');
   mount.innerHTML = '<p class="admin-notice">Loading&hellip;</p>';
   try {
-    if (section === 'categories') await renderCategoriesSection(mount);
+    if (section === 'gallery') await renderGallerySection(mount);
+    else if (section === 'categories') await renderCategoriesSection(mount);
     else if (section === 'shipping') await renderShippingSection(mount);
     else if (section === 'orders') await renderOrdersSection(mount);
     else await renderProductsSection(mount);
@@ -275,6 +285,19 @@ async function renderCategoriesSection(mount) {
       onRename: (id, fields) => adminUpdateCategory(id, fields),
       onReorder: (orderedIds) => adminReorderCategories(orderedIds),
       onDelete: (id) => adminDeleteCategory(id),
+    })
+  );
+}
+
+async function renderGallerySection(mount) {
+  mount.innerHTML = '<h1>Gallery</h1><p class="admin-notice">Order here also controls the public /gallery page order. Hidden images never appear publicly.</p><div id="gallery-mount"></div>';
+  const items = await adminListGalleryItems();
+  mount.querySelector('#gallery-mount').appendChild(
+    createGalleryManager(items, {
+      onUpload: (file, sortOrder) => uploadGalleryImage(file, { sortOrder }),
+      onUpdate: (id, patch) => adminUpdateGalleryItem(id, patch),
+      onReorder: (orderedIds) => adminReorderGalleryItems(orderedIds),
+      onDelete: (item) => adminDeleteGalleryItem(item),
     })
   );
 }

@@ -15,3 +15,16 @@ export function uniqueImagePath(productId, extension = 'webp') {
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `products/${productId}/${id}.${extension}`;
 }
+
+/**
+ * Builds a unique Storage object path for an uploaded gallery image. No
+ * per-product namespace needed — the gallery-images bucket is gallery-only.
+ * @param {string} [extension]
+ */
+export function uniqueGalleryImagePath(extension = 'webp') {
+  const id =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `gallery/${id}.${extension}`;
+}

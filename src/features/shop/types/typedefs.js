@@ -29,4 +29,15 @@
  * @property {ProductImage[]} images
  */
 
+/**
+ * @typedef {Object} GalleryItem
+ * @property {string} id
+ * @property {string|null} url
+ * @property {string|null} [title]
+ * @property {string|null} [caption]
+ * @property {string|null} [altText]
+ * @property {number} sortOrder
+ * @property {boolean} featured
+ */
+
 export {};

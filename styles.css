@@ -1881,6 +1881,24 @@ a:hover {
     margin-top: 6px;
 }
 
+/* Section landing cards: every cover thumbnail fills the same fixed box
+   regardless of the source image's own aspect ratio — matches the 3:4
+   ratio the already-good covers (Masks, Plant Life, etc.) happen to be,
+   so a portrait outlier like Lighter Covers no longer makes its card
+   much taller than the rest. Crop is purely visual for this thumbnail —
+   no derivative file is generated, and the section's own item grid and
+   lightbox keep showing images at their full original aspect ratio. */
+.gallery-masonry .gallery-section-card img {
+    aspect-ratio: 3 / 4;
+    height: auto;
+    object-fit: cover;
+    object-position: center;
+}
+
+.gallery-section-card .specimen-image.placeholder {
+    aspect-ratio: 3 / 4;
+}
+
 .gallery-back-link {
     display: inline-block;
     margin: -20px 0 30px;

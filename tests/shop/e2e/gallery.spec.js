@@ -37,6 +37,16 @@ test.describe('Gallery landing (/gallery)', () => {
 
   test('no broken cover images', async ({ page }, t) => {
     await loadOrSkip(t, page, '/gallery');
+    // Cover thumbnails now reserve their final box size upfront (fixed
+    // aspect-ratio, no layout shift), so native `loading="lazy"` correctly
+    // waits to fetch cards far below the fold until they're actually
+    // scrolled near — scroll through first, like a real visitor would,
+    // before checking that nothing that *has* loaded is broken.
+    await page.evaluate(async () => {
+      window.scrollTo(0, document.body.scrollHeight);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    await page.waitForLoadState('networkidle');
     const broken = await page.evaluate(() =>
       Array.from(document.querySelectorAll('.gallery-section-card img')).filter(
         (img) => !img.complete || img.naturalWidth === 0

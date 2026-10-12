@@ -391,19 +391,16 @@ a:hover {
 }
 
 .about-image {
-    max-width: 400px;
+    max-width: 340px;
     margin: 0 auto 40px;
 }
 
-.about-image-placeholder {
-    aspect-ratio: 1;
-    background-color: var(--bg-card);
+.about-image img {
+    display: block;
+    width: 100%;
+    height: auto;
     border: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-secondary);
-    font-size: 0.85rem;
+    background-color: var(--bg-card);
 }
 
 .about-text h2 {

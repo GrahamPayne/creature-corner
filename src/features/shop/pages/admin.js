@@ -319,38 +319,75 @@ async function renderCategoriesSection(mount) {
   );
 }
 
+/**
+ * Gallery admin has two views sharing one `mount`: the Sections overview
+ * (list + Unassigned quick-link) and a focused per-section image manager
+ * (createGalleryManager's `scope` mode). Each view re-fetches fresh items/
+ * sections on entry rather than threading mutated state between the two
+ * independently-stateful child components — simpler and avoids the counts
+ * on the overview (or the image list inside a freshly-opened section) ever
+ * going stale after an edit/move/upload/delete made in the other view.
+ */
 async function renderGallerySection(mount) {
-  mount.innerHTML = `
-    <h1>Gallery</h1>
-    <div class="admin-form-section">
-      <h2 class="admin-form-section-title">Gallery Sections</h2>
-      <p class="admin-notice">Portfolio groupings for the public /gallery landing page (Masks, Plants, Busts, Paintings, etc.) — entirely separate from the shop's product categories.</p>
-      <div id="gallery-sections-mount"></div>
-    </div>
-    <div id="gallery-mount"></div>
-  `;
-  const [items, sections] = await Promise.all([adminListGalleryItems(), adminListGallerySections()]);
+  async function showOverview() {
+    activeUnsavedCheck = null;
+    activeDestroy = null;
+    mount.innerHTML = '<p class="admin-notice">Loading&hellip;</p>';
+    const [items, sections] = await Promise.all([adminListGalleryItems(), adminListGallerySections()]);
+    const unassignedCount = items.filter((i) => !i.gallerySectionId).length;
 
-  mount.querySelector('#gallery-sections-mount').appendChild(
-    createGallerySectionManager(sections, items, {
-      onCreate: (fields) => adminCreateGallerySection(fields),
-      onRename: (id, fields) => adminUpdateGallerySection(id, fields),
-      onToggleVisible: (id, visible) => adminUpdateGallerySection(id, { visible }),
-      onReorder: (orderedIds) => adminReorderGallerySections(orderedIds),
-      onDelete: (id) => adminDeleteGallerySection(id),
-    })
-  );
+    mount.innerHTML = `
+      <h1>Gallery</h1>
+      <div class="admin-form-section">
+        <h2 class="admin-form-section-title">Gallery Sections</h2>
+        <p class="admin-notice">Portfolio groupings for the public /gallery landing page (Masks, Plants, Busts, Paintings, etc.) — entirely separate from the shop's product categories. Click a section to manage and reorder its images.</p>
+        <div id="gallery-sections-mount"></div>
+        <div class="admin-gallery-unassigned-row">
+          <span><strong>Unassigned</strong> &mdash; ${unassignedCount} image${unassignedCount === 1 ? '' : 's'}</span>
+          <button type="button" class="admin-btn-sm" id="manage-unassigned-btn">Manage Images</button>
+        </div>
+      </div>
+    `;
 
-  const galleryManager = createGalleryManager(items, sections, {
-    onUpload: (file, sortOrder, gallerySectionId) => uploadGalleryImage(file, { sortOrder, gallerySectionId }),
-    onUpdate: (id, patch) => adminUpdateGalleryItem(id, patch),
-    onReorder: (orderedIds) => adminReorderGalleryItems(orderedIds),
-    onDelete: (item) => adminDeleteGalleryItem(item),
-    onSetCover: (sectionId, itemId) => adminSetSectionCover(sectionId, itemId),
-  });
-  mount.querySelector('#gallery-mount').appendChild(galleryManager.element);
-  activeUnsavedCheck = galleryManager.hasUnsavedChanges;
-  activeDestroy = galleryManager.destroy;
+    mount.querySelector('#gallery-sections-mount').appendChild(
+      createGallerySectionManager(sections, items, {
+        onCreate: (fields) => adminCreateGallerySection(fields),
+        onRename: (id, fields) => adminUpdateGallerySection(id, fields),
+        onToggleVisible: (id, visible) => adminUpdateGallerySection(id, { visible }),
+        onReorder: (orderedIds) => adminReorderGallerySections(orderedIds),
+        onDelete: (id) => adminDeleteGallerySection(id),
+        onManage: (id) => {
+          const section = sections.find((s) => s.id === id);
+          if (section) showSectionManager({ type: 'section', id, name: section.name });
+        },
+      })
+    );
+    mount.querySelector('#manage-unassigned-btn').addEventListener('click', () => showSectionManager({ type: 'unassigned' }));
+  }
+
+  async function showSectionManager(scope) {
+    mount.innerHTML = '<p class="admin-notice">Loading&hellip;</p>';
+    const [items, sections] = await Promise.all([adminListGalleryItems(), adminListGallerySections()]);
+
+    mount.innerHTML = '<div id="gallery-mount"></div>';
+    const galleryManager = createGalleryManager(
+      items,
+      sections,
+      {
+        onUpload: (file, sortOrder, gallerySectionId) => uploadGalleryImage(file, { sortOrder, gallerySectionId }),
+        onUpdate: (id, patch) => adminUpdateGalleryItem(id, patch),
+        onReorder: (orderedIds) => adminReorderGalleryItems(orderedIds),
+        onDelete: (item) => adminDeleteGalleryItem(item),
+        onSetCover: (sectionId, itemId) => adminSetSectionCover(sectionId, itemId),
+      },
+      { scope, onBack: showOverview }
+    );
+    mount.querySelector('#gallery-mount').appendChild(galleryManager.element);
+    activeUnsavedCheck = galleryManager.hasUnsavedChanges;
+    activeDestroy = galleryManager.destroy;
+  }
+
+  await showOverview();
 }
 
 async function renderOrdersSection(mount) {

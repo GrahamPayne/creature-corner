@@ -37,14 +37,31 @@ import {
  *   onDelete: (item: any) => Promise<void>,
  *   onSetCover: (sectionId: string, itemId: string|null) => Promise<any>,
  * }} handlers
+ * @param {{
+ *   scope?: {type: 'section', id: string, name: string} | {type: 'unassigned'},
+ *   onBack?: () => void,
+ * }} [options] - When `scope` is set, the manager is locked to that one
+ *   section (or the Unassigned group): no filter bar, no other sections'
+ *   images shown — Move Up/Down, Save, Save All, and uploads all operate
+ *   exactly as in the unscoped "All" view, just pre-filtered. A breadcrumb
+ *   header replaces the filter bar and calls `onBack` (after the same
+ *   unsaved-changes confirmation the admin shell uses elsewhere) instead
+ *   of switching filters.
  * @returns {{element: HTMLElement, hasUnsavedChanges: () => boolean, destroy: () => void}}
  */
-export function createGalleryManager(initialItems, initialSections, { onUpload, onUpdate, onReorder, onDelete, onSetCover }) {
+export function createGalleryManager(initialItems, initialSections, { onUpload, onUpdate, onReorder, onDelete, onSetCover }, { scope = null, onBack = null } = {}) {
   let items = initialItems.slice();
   let sections = initialSections.slice();
   /** @type {Map<string, any>} */
   let drafts = new Map();
-  let activeFilter = 'all';
+  let activeFilter = scope ? (scope.type === 'unassigned' ? 'unassigned' : scope.id) : 'all';
+
+  /** Display label for the locked scope's breadcrumb — falls back to the name passed in if the section isn't in `sections` (shouldn't normally happen). */
+  function scopeLabel() {
+    if (!scope) return '';
+    if (scope.type === 'unassigned') return 'Unassigned';
+    return sections.find((s) => s.id === scope.id)?.name || scope.name || 'Section';
+  }
 
   const wrap = document.createElement('div');
 
@@ -83,17 +100,24 @@ export function createGalleryManager(initialItems, initialSections, { onUpload, 
 
       <div class="admin-form-section">
         <h2 class="admin-form-section-title">Add Images</h2>
-        <p class="admin-notice">JPG, PNG, or WebP, up to 10MB each. Resized for web use; original quality and aspect ratio are preserved. New images are added to the currently filtered section (or Unassigned, under "All").</p>
+        <p class="admin-notice">JPG, PNG, or WebP, up to 10MB each. Resized for web use; original quality and aspect ratio are preserved. ${scope ? `New images are added to ${escapeHtml(scopeLabel())}.` : 'New images are added to the currently filtered section (or Unassigned, under "All").'}</p>
         <label class="admin-btn admin-image-add-btn" for="gallery-file-input">+ Add Images</label>
         <input type="file" id="gallery-file-input" class="admin-image-file-input" accept="image/jpeg,image/png,image/webp" multiple>
       </div>
 
       <div class="admin-header">
-        <div class="admin-filter-bar" id="gallery-filter-bar">
-          <button type="button" class="admin-btn-sm${activeFilter === 'all' ? ' admin-btn-sm-active' : ''}" data-filter="all">All</button>
-          <button type="button" class="admin-btn-sm${activeFilter === 'unassigned' ? ' admin-btn-sm-active' : ''}" data-filter="unassigned">Unassigned</button>
-          ${sections.map((s) => `<button type="button" class="admin-btn-sm${activeFilter === s.id ? ' admin-btn-sm-active' : ''}" data-filter="${s.id}">${escapeHtml(s.name)}</button>`).join('')}
-        </div>
+        ${scope
+          ? `<div class="admin-gallery-breadcrumb">
+              <button type="button" class="admin-link-btn" id="gallery-back-btn">&larr; Back to Gallery Sections</button>
+              <h2 class="admin-gallery-breadcrumb-title">Gallery &rsaquo; ${escapeHtml(scopeLabel().toUpperCase())}</h2>
+              <span class="admin-gallery-breadcrumb-count">${shown.length} IMAGE${shown.length === 1 ? '' : 'S'}</span>
+            </div>`
+          : `<div class="admin-filter-bar" id="gallery-filter-bar">
+              <button type="button" class="admin-btn-sm${activeFilter === 'all' ? ' admin-btn-sm-active' : ''}" data-filter="all">All</button>
+              <button type="button" class="admin-btn-sm${activeFilter === 'unassigned' ? ' admin-btn-sm-active' : ''}" data-filter="unassigned">Unassigned</button>
+              ${sections.map((s) => `<button type="button" class="admin-btn-sm${activeFilter === s.id ? ' admin-btn-sm-active' : ''}" data-filter="${s.id}">${escapeHtml(s.name)}</button>`).join('')}
+            </div>`
+        }
         <button type="button" class="admin-btn admin-btn-primary" id="gallery-save-all">Save All Changes</button>
       </div>
 
@@ -166,6 +190,15 @@ export function createGalleryManager(initialItems, initialSections, { onUpload, 
 
   function cardEl(id) {
     return wrap.querySelector(`.admin-gallery-card[data-id="${id}"]`);
+  }
+
+  /** Keeps the scoped breadcrumb's "N IMAGES" count accurate after a targeted DOM update (upload/delete) that doesn't go through a full render(). */
+  function updateBreadcrumbCount() {
+    if (!scope) return;
+    const countEl = wrap.querySelector('.admin-gallery-breadcrumb-count');
+    if (!countEl) return;
+    const n = visibleItems().length;
+    countEl.textContent = `${n} IMAGE${n === 1 ? '' : 'S'}`;
   }
 
   /** Re-renders just one card in place and re-wires it — the targeted update that replaces the old full-grid render() on most actions. */
@@ -258,14 +291,23 @@ export function createGalleryManager(initialItems, initialSections, { onUpload, 
       if (failures.length > 0) showError(failures.join(' '));
       // No grid existed before this upload (previous state was empty) — now it does, needs a full render once.
       if (!grid) render();
+      else updateBreadcrumbCount();
     });
 
-    wrap.querySelectorAll('[data-filter]').forEach((btn) =>
-      btn.addEventListener('click', () => {
-        activeFilter = btn.getAttribute('data-filter');
-        render();
-      })
-    );
+    if (scope) {
+      wrap.querySelector('#gallery-back-btn').addEventListener('click', () => {
+        if (hasAnyDirty(items, drafts) && !window.confirm('You have unsaved changes. Leave without saving?')) return;
+        window.removeEventListener('beforeunload', beforeUnloadHandler);
+        onBack?.();
+      });
+    } else {
+      wrap.querySelectorAll('[data-filter]').forEach((btn) =>
+        btn.addEventListener('click', () => {
+          activeFilter = btn.getAttribute('data-filter');
+          render();
+        })
+      );
+    }
 
     wrap.querySelector('#gallery-save-all').addEventListener('click', async () => {
       const ids = dirtyIds(items, drafts);
@@ -361,6 +403,7 @@ export function createGalleryManager(initialItems, initialSections, { onUpload, 
         items = items.filter((i) => i.id !== id);
         drafts = clearDraft(drafts, id);
         el.remove();
+        updateBreadcrumbCount();
       } catch (err) {
         showError(err instanceof Error ? err.message : 'Could not delete that image.');
       }

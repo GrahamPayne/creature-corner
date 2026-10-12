@@ -21,9 +21,10 @@ import { slugify } from './slug.js';
  *   onToggleVisible: (id: string, visible: boolean) => Promise<any>,
  *   onReorder: (orderedIds: string[]) => Promise<void>,
  *   onDelete: (id: string) => Promise<void>,
+ *   onManage: (id: string) => void,
  * }} handlers
  */
-export function createGallerySectionManager(initialSections, items, { onCreate, onRename, onToggleVisible, onReorder, onDelete }) {
+export function createGallerySectionManager(initialSections, items, { onCreate, onRename, onToggleVisible, onReorder, onDelete, onManage }) {
   let sections = initialSections.slice().sort((a, b) => a.sortOrder - b.sortOrder);
   let editingId = null;
 
@@ -93,12 +94,13 @@ export function createGallerySectionManager(initialSections, items, { onCreate, 
           <button type="button" class="admin-btn-sm" data-act="move-up" ${index === 0 ? 'disabled' : ''}>&uarr;</button>
           <button type="button" class="admin-btn-sm" data-act="move-down" ${index === sections.length - 1 ? 'disabled' : ''}>&darr;</button>
         </td>
-        <td>${escapeHtml(s.name)}</td>
+        <td><button type="button" class="admin-link-btn" data-act="manage">${escapeHtml(s.name)}</button></td>
         <td>${escapeHtml(s.slug)}</td>
         <td>${itemCount(s.id)}</td>
         <td><span class="admin-status admin-status-${s.visible ? 'available' : 'hidden'}">${s.visible ? 'Visible' : 'Hidden'}</span></td>
         <td>${warning ? `<span class="admin-gallery-warnings">! ${escapeHtml(warning)}</span>` : (s.featuredGalleryItemId ? 'Set' : '—')}</td>
         <td class="admin-actions-cell">
+          <button type="button" class="admin-btn-sm" data-act="manage">Manage Images</button>
           <button type="button" class="admin-btn-sm" data-act="rename">Rename</button>
           <button type="button" class="admin-btn-sm" data-act="toggle-visible">${s.visible ? 'Hide' : 'Show'}</button>
           <button type="button" class="admin-btn-sm admin-btn-danger" data-act="delete">Delete</button>
@@ -129,6 +131,9 @@ export function createGallerySectionManager(initialSections, items, { onCreate, 
   }
 
   function wire() {
+    wrap.querySelectorAll('[data-act="manage"]').forEach((btn) =>
+      btn.addEventListener('click', () => onManage(btn.closest('tr').dataset.id))
+    );
     wrap.querySelectorAll('[data-act="move-up"]').forEach((btn) =>
       btn.addEventListener('click', () => move(btn.closest('tr').dataset.id, -1))
     );

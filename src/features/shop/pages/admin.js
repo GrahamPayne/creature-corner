@@ -22,15 +22,36 @@ import {
   adminReorderGalleryItems,
   uploadGalleryImage,
   adminDeleteGalleryItem,
+  adminListGallerySections,
+  adminCreateGallerySection,
+  adminUpdateGallerySection,
+  adminReorderGallerySections,
+  adminDeleteGallerySection,
+  adminSetSectionCover,
 } from '../admin/galleryApi.js';
 import { createProductForm } from '../admin/productForm.js';
 import { createProductTable } from '../admin/productTable.js';
 import { createShippingForm } from '../admin/shippingForm.js';
 import { createCategoryManager } from '../admin/categoryManager.js';
 import { createGalleryManager } from '../admin/galleryManager.js';
+import { createGallerySectionManager } from '../admin/gallerySectionManager.js';
 import { createOrdersTable } from '../admin/ordersTable.js';
 import { createOrderDetail } from '../admin/orderDetail.js';
 import { escapeHtml } from '../dom.js';
+
+// Set by whichever section currently has unsaved-edit tracking (just
+// Gallery, for now) — checked before switching admin tabs or signing
+// out, so neither silently discards in-progress drafts. Generic/shell-
+// level on purpose: any future section can opt in the same way.
+let activeUnsavedCheck = null;
+let activeDestroy = null;
+
+function confirmLeaveIfUnsaved() {
+  if (activeUnsavedCheck && activeUnsavedCheck()) {
+    return window.confirm('You have unsaved changes. Leave this page without saving?');
+  }
+  return true;
+}
 
 const root = document.getElementById('admin-root');
 
@@ -137,6 +158,11 @@ async function renderShell(section) {
 
 /** @param {string} section */
 async function renderSection(section) {
+  if (!confirmLeaveIfUnsaved()) return;
+  activeDestroy?.();
+  activeUnsavedCheck = null;
+  activeDestroy = null;
+
   const navMount = document.getElementById('admin-nav-mount');
   navMount.innerHTML = renderNav(section);
   navMount.querySelectorAll('[data-section]').forEach((link) =>
@@ -146,6 +172,10 @@ async function renderSection(section) {
     })
   );
   document.getElementById('signout-btn').addEventListener('click', async () => {
+    if (!confirmLeaveIfUnsaved()) return;
+    activeDestroy?.();
+    activeUnsavedCheck = null;
+    activeDestroy = null;
     await signOut();
     renderLogin();
   });
@@ -290,16 +320,37 @@ async function renderCategoriesSection(mount) {
 }
 
 async function renderGallerySection(mount) {
-  mount.innerHTML = '<h1>Gallery</h1><p class="admin-notice">Order here also controls the public /gallery page order. Hidden images never appear publicly.</p><div id="gallery-mount"></div>';
-  const items = await adminListGalleryItems();
-  mount.querySelector('#gallery-mount').appendChild(
-    createGalleryManager(items, {
-      onUpload: (file, sortOrder) => uploadGalleryImage(file, { sortOrder }),
-      onUpdate: (id, patch) => adminUpdateGalleryItem(id, patch),
-      onReorder: (orderedIds) => adminReorderGalleryItems(orderedIds),
-      onDelete: (item) => adminDeleteGalleryItem(item),
+  mount.innerHTML = `
+    <h1>Gallery</h1>
+    <div class="admin-form-section">
+      <h2 class="admin-form-section-title">Gallery Sections</h2>
+      <p class="admin-notice">Portfolio groupings for the public /gallery landing page (Masks, Plants, Busts, Paintings, etc.) — entirely separate from the shop's product categories.</p>
+      <div id="gallery-sections-mount"></div>
+    </div>
+    <div id="gallery-mount"></div>
+  `;
+  const [items, sections] = await Promise.all([adminListGalleryItems(), adminListGallerySections()]);
+
+  mount.querySelector('#gallery-sections-mount').appendChild(
+    createGallerySectionManager(sections, items, {
+      onCreate: (fields) => adminCreateGallerySection(fields),
+      onRename: (id, fields) => adminUpdateGallerySection(id, fields),
+      onToggleVisible: (id, visible) => adminUpdateGallerySection(id, { visible }),
+      onReorder: (orderedIds) => adminReorderGallerySections(orderedIds),
+      onDelete: (id) => adminDeleteGallerySection(id),
     })
   );
+
+  const galleryManager = createGalleryManager(items, sections, {
+    onUpload: (file, sortOrder, gallerySectionId) => uploadGalleryImage(file, { sortOrder, gallerySectionId }),
+    onUpdate: (id, patch) => adminUpdateGalleryItem(id, patch),
+    onReorder: (orderedIds) => adminReorderGalleryItems(orderedIds),
+    onDelete: (item) => adminDeleteGalleryItem(item),
+    onSetCover: (sectionId, itemId) => adminSetSectionCover(sectionId, itemId),
+  });
+  mount.querySelector('#gallery-mount').appendChild(galleryManager.element);
+  activeUnsavedCheck = galleryManager.hasUnsavedChanges;
+  activeDestroy = galleryManager.destroy;
 }
 
 async function renderOrdersSection(mount) {

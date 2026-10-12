@@ -469,13 +469,40 @@ body.page-admin {
     color: var(--text-secondary);
 }
 
-.admin-gallery-card input[type="text"] {
+.admin-gallery-card input[type="text"],
+.admin-gallery-card select {
     background: var(--bg-dark);
     border: 1px solid var(--border);
     color: var(--text-primary);
     padding: 6px 8px;
     font-size: 0.85rem;
     font-family: inherit;
+}
+
+.admin-gallery-card .admin-form-checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-gallery-card .admin-form-checkbox input {
+    width: auto;
+}
+
+.admin-gallery-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.admin-gallery-unsaved {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 3px 8px;
+    color: var(--accent);
+    border: 1px solid var(--accent);
 }
 
 .admin-gallery-warnings {

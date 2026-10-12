@@ -1832,6 +1832,51 @@ a:hover {
     opacity: 1;
 }
 
+/* Gallery section landing cards (reuse .gallery-item's image/hover treatment, add a name/count label below) */
+.gallery-section-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+
+.gallery-section-info {
+    position: relative;
+    z-index: 1;
+    padding: 14px 10px;
+    text-align: center;
+}
+
+.gallery-section-name {
+    display: block;
+    font-family: var(--catalog-font);
+    font-size: 0.85rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+.gallery-section-count {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    margin-top: 6px;
+}
+
+.gallery-back-link {
+    display: inline-block;
+    margin: -20px 0 30px;
+    font-family: var(--catalog-font);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.gallery-back-link:hover {
+    color: var(--accent);
+}
+
 /* Masonry responsive */
 @media (max-width: 1200px) {
     .gallery-masonry {

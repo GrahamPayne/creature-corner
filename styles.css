@@ -1795,7 +1795,21 @@ a:hover {
 .gallery-masonry {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
+    grid-auto-flow: dense;
+    /* Grid items default to stretch: without this, a short/wide image
+       sharing a row with a tall portrait gets its card stretched to
+       match — exposing the card's own dark background as empty space
+       below the (naturally-sized) image. `start` lets every card be
+       exactly as tall as its own image, portrait or wide. */
+    align-items: start;
     gap: 12px;
+}
+
+/* Clearly landscape images (set by pages/gallery.js after each image
+   loads, from its actual naturalWidth/naturalHeight — never stored) get
+   a second column so they don't render at awkward portrait-card width. */
+.gallery-masonry .gallery-item--wide {
+    grid-column: span 2;
 }
 
 .gallery-masonry .gallery-item {
@@ -1888,6 +1902,11 @@ a:hover {
     .gallery-masonry {
         grid-template-columns: repeat(2, 1fr);
         gap: 8px;
+    }
+
+    /* Mobile: every card returns to a single column, wide or not. */
+    .gallery-masonry .gallery-item--wide {
+        grid-column: span 1;
     }
 }
 

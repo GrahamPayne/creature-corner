@@ -12,6 +12,25 @@ const lightboxCounter = document.getElementById('lightbox-counter');
 let items = [];
 let currentIndex = 0;
 
+// width/height at or above this ratio spans 2 grid columns instead of 1
+// (see .gallery-item--wide in styles.css) — detected from the actual
+// loaded image's natural dimensions, never stored anywhere. 1.3 (not
+// 1.35) deliberately: the live gallery's landscape photos cluster right
+// at the common 4:3 camera ratio (1.33), which 1.35 would exclude
+// entirely — checked against the real data before picking this value.
+const WIDE_ASPECT_RATIO = 1.3;
+
+/** Marks `article` as wide once `img` has loaded, if its natural aspect ratio clears the threshold — works whether the image loads after this runs or is already cached/complete. */
+function markWideWhenLoaded(img, article) {
+  const check = () => {
+    if (img.naturalWidth && img.naturalHeight && img.naturalWidth / img.naturalHeight >= WIDE_ASPECT_RATIO) {
+      article.classList.add('gallery-item--wide');
+    }
+  };
+  if (img.complete) check();
+  else img.addEventListener('load', check, { once: true });
+}
+
 function renderGrid() {
   grid.className = 'gallery-grid gallery-masonry';
   grid.innerHTML = '';
@@ -25,6 +44,9 @@ function renderGrid() {
       : '<span class="specimen-image placeholder"><span>No Image</span></span>';
     article.addEventListener('click', () => openLightbox(index));
     grid.appendChild(article);
+
+    const img = article.querySelector('img');
+    if (img) markWideWhenLoaded(img, article);
   });
 }
 

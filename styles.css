@@ -387,12 +387,12 @@ a:hover {
 
 .about-body {
     display: grid;
-    gap: 50px;
+    gap: 28px;
 }
 
 .about-image {
-    max-width: 340px;
-    margin: 0 auto 40px;
+    max-width: 280px;
+    margin: 0 auto;
 }
 
 .about-image img {
@@ -401,6 +401,12 @@ a:hover {
     height: auto;
     border: 1px solid var(--border);
     background-color: var(--bg-card);
+}
+
+.about-text {
+    max-width: 700px;
+    margin: 0 auto;
+    text-align: center;
 }
 
 .about-text h2 {
@@ -422,13 +428,14 @@ a:hover {
     width: 60px;
     height: 1px;
     background-color: var(--border);
-    margin: 40px 0;
+    margin: 32px auto;
 }
 
 .about-social {
     display: flex;
     gap: 16px;
     flex-wrap: wrap;
+    justify-content: center;
     margin-top: 30px;
 }
 

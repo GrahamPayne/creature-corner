@@ -4,8 +4,15 @@ This builds out `docs/ORDERS_AND_PACKING_SLIP.md`'s Stage 6.5 placeholder
 into a real order-management system: persistent orders with separate
 payment/fulfillment/shipping status, atomic inventory reservations, a
 provider-agnostic payment/shipping-label interface, and an admin-only Safe
-Test Mode. **No live payment or shipping-label provider is connected** —
-that's intentionally the next phase, once credentials exist.
+Test Mode.
+
+**Stripe Checkout is now really connected, Sandbox (test mode) only** —
+see "Real Stripe Checkout integration" below. `assertSandboxMode()` in
+`stripeProvider.js` refuses any key that isn't `sk_test_...` unless
+`STRIPE_MODE` is explicitly set to `"live"`, so this stays sandboxed at the
+code level, not just by convention, until someone deliberately flips that.
+No live shipping-label provider is connected yet — that's still a later
+phase.
 
 ## What already existed (Stage 6/6.5)
 
@@ -48,11 +55,12 @@ is edited, re-categorized, or deleted.
 New tables: `inventory_reservations` (the overselling guard),
 `order_events` (append-only audit trail), `payment_events` (idempotent
 webhook ledger, `unique(provider, provider_event_id)`). `payment_events`
-is schema-only right now — nothing writes to it yet, including the
-admin-side test-payment-confirm flow, since Safe Test Mode has no real
-webhook to deduplicate. It starts actually enforcing idempotency the
-moment a real provider's webhook handler is built (see the handoff
-checklists below) and inserts into it before processing each event.
+is now live: `functions/api/webhooks/stripe.js` inserts into it before
+processing each verified Stripe event — the unique constraint on
+`(provider, provider_event_id)` is the actual idempotency guard (a
+duplicate delivery's insert fails with `23505`, treated as already
+processed). Safe Test Mode still never writes to it — there's no real
+webhook to deduplicate there.
 
 New RPC functions: `reserve_inventory`, `confirm_reservation`,
 `release_reservation`, `release_expired_reservations` — see Inventory
@@ -119,20 +127,88 @@ bypass it.
 
 `src/features/shop/payments/paymentProvider.js` defines the interface
 (`createSession`, `verifyWebhookSignature`, `parseWebhookEvent`,
-`getTransaction`, `refund`). Three implementations:
+`getTransaction`, `refund`), each now threading an `env` credentials bag
+through so a provider never needs module-level secrets. Implementations:
 
-- `providers/testProvider.js` — the only one actually reachable today,
-  and only from the admin-only test-order tool. Never touches a real
-  payment network.
-- `providers/stripeProvider.js`, `providers/paypalProvider.js` — every
-  method throws `ProviderNotConfiguredError`. Each file's header comment
-  is a step-by-step handoff checklist (mirrors
-  `docs/SHIPPING_ARCHITECTURE.md`'s EasyPost checklist) for when real
-  credentials arrive. Deliberately independent of each other — PayPal is
-  never routed through Stripe.
+- `providers/testProvider.js` — admin-only test-order tool, never touches
+  a real payment network.
+- `providers/stripeProvider.js` — **real**, talking to Stripe's REST API
+  directly via `fetch()` (deliberately no `stripe` npm package — this
+  project's Cloudflare Pages build has no configured build command, so
+  `node_modules` is never installed before Functions bundling; any
+  npm-resolved import fails there even though it works locally). Builds
+  Checkout Sessions from inline `price_data` line items (never
+  pre-created Stripe Price/Product objects, so the catalog is never
+  duplicated into Stripe), verifies webhook signatures with Web Crypto
+  HMAC-SHA256 (constant-time compare, 5-minute replay-tolerance window),
+  and is hard-gated to Sandbox by `assertSandboxMode()`.
+- `providers/paypalProvider.js` — still every method throws
+  `ProviderNotConfiguredError`; its header comment is a step-by-step
+  handoff checklist, deliberately independent of Stripe so PayPal is
+  never routed through it.
 
 `payments/providerRegistry.js` is the one place a provider is selected by
 name; adding Square later is a new file plus one registry line.
+
+### Real Stripe Checkout integration
+
+Three Cloudflare Pages Functions, all talking to Supabase via the same
+hand-rolled fetch-based REST/RPC client used elsewhere in `functions/`
+(no SDK, for the same no-npm-install reason as above):
+
+- **`functions/api/orders/create.js`** — wired to `pages/cart.js`'s
+  "Continue to Payment" button. Re-fetches every product server-side
+  (price, quantity, status, shipping class — the browser's cart is never
+  trusted for any of it), re-checks the fulfillment choice against
+  `determineFulfillmentOptions`, computes a real shipping quote via
+  `getShippingQuote` (never assumes free shipping, 409s if shipping isn't
+  configured for the cart), computes totals with `tax_cents: 0` explicit
+  (not omitted — see Sales tax below), creates the order + order_items +
+  one `reserve_inventory` call per item (30-minute TTL), then calls
+  `stripeProvider.createSession()` and stores the returned session id as
+  `orders.payment_reference`. If Stripe itself fails after the order/
+  reservation exist, both are left intact (status stays `pending`) for
+  admin cleanup — nothing is charged, nothing is silently lost.
+- **`functions/api/webhooks/stripe.js`** — the only path that can ever
+  mark a real order Paid (never the browser redirect, never an admin
+  action — `adminConfirmTestPayment`/`adminRefundOrder` explicitly refuse
+  any non-test order). Reads the raw request body and verifies its
+  signature *before* any JSON parsing; records every verified event in
+  `payment_events` first (the idempotency gate) and only then processes
+  it, so a processing bug can never silently lose a paid order — the raw
+  event is still on file to reprocess. `confirmOrderReservations()`
+  re-attempts `reserve_inventory` for any reservation that already
+  expired or was released before a late/out-of-order
+  `checkout.session.completed` arrives (recovering the common case where
+  stock is still available); if that genuinely can't recover (the stock
+  sold to someone else in the interim), the order is still marked `paid`
+  truthfully but a `payment.inventory_conflict` `order_events` row is
+  written so it surfaces in Admin → Orders for manual reconciliation —
+  never silently dropped. `charge.refunded` deliberately never touches
+  inventory/reservations — restoring a one-of-a-kind piece after a refund
+  stays an explicit admin decision via the product editor.
+- **`functions/api/orders/status.js`** — the only thing
+  `order-confirmation.html` ever reads. Looks orders up by the Stripe
+  Checkout Session id (an unguessable capability token — the same trust
+  level Stripe's own redirect already implies) and returns only
+  non-sensitive fields. The confirmation page polls this a handful of
+  times and only clears the local cart once it sees `paymentStatus ===
+  'paid'` from the server — the redirect itself is never treated as proof
+  of payment.
+
+Required Cloudflare Pages secrets: `SUPABASE_SERVICE_ROLE_KEY` (already
+in use by other Functions), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`.
+Optional: `STRIPE_MODE` (must be exactly `"live"` to allow a non-`sk_test_`
+key), `STRIPE_AUTOMATIC_TAX` (`"true"` to enable Stripe Tax — see below).
+
+#### Sales tax
+
+The Stripe account is on "Tax Basic" and CA seller's-permit registration
+isn't complete, so `automatic_tax.enabled` defaults to `false`
+(`STRIPE_AUTOMATIC_TAX` unset or anything other than `"true"`) and
+`tax_cents` is computed as an explicit `0`, never omitted. Flipping
+`STRIPE_AUTOMATIC_TAX` to `"true"` is the only step needed once
+registration is actually complete — do not do this before then.
 
 ### Shipping label architecture (section H)
 
@@ -176,52 +252,69 @@ Reachable only from inside the authenticated Admin → Orders screen —
 there is no public entry point, nothing on `/shop` or `/cart` changed at
 all.
 
-### The future real checkout function
+### History: the Cloudflare Functions build issues (resolved)
 
-A first version of this (`functions/api/orders/create.js` — re-fetch
-authoritative product data, validate, reserve inventory via the same RPC,
-compute totals server-side with the same `orderTotals.js` the admin tool
-uses, insert the order via the service-role key) was written and
-committed, then **pulled from this deploy**: adding the repo's first-ever
-`/functions` directory appears to have broken the Cloudflare Pages build
-for this commit entirely — every static asset this same commit changed
-(not just the Function) stopped updating on production, consistent with
-a failed Functions bundle blocking the whole deployment rather than just
-that one route. The most likely specific cause is that Pages Functions
-need the `nodejs_compat` compatibility flag for `@supabase/supabase-js`
-(it relies on Node built-ins) — not set anywhere in this project. This
-environment has no Cloudflare dashboard access to confirm the build log
-or set that flag, so rather than guess further at Cloudflare-specific
-config and risk leaving the *entire* deployment stuck, the Function was
-removed to let everything else (schema, admin UI, pure logic, tests)
-ship. The file's full content is preserved in git history at commit
-`1cc5ce0` and is straightforward to reintroduce once compatibility is
-sorted out — nothing else in this phase depends on it existing.
+Earlier attempts to add `/functions` broke the Cloudflare Pages build
+entirely — not just the one route, but every static asset in the same
+deploy stopped updating. Root causes, found and fixed one at a time by
+diffing a local Wrangler build against what Cloudflare's build log
+reported:
+
+1. The very first `/functions` directory addition broke the whole build;
+   it was pulled from that deploy to unblock everything else while the
+   cause was tracked down.
+2. `wrangler.toml` was missing the required top-level `name` field.
+3. `@supabase/supabase-js` (and, by the same logic, the `stripe` npm
+   package) can never be resolved, because this project's Cloudflare
+   Pages build has **no configured build command**, so `npm install`
+   never runs before the Functions bundler does — an import that
+   resolves fine locally (where `node_modules` already exists from a
+   manual `npm install`) fails on Cloudflare with "Could not resolve".
+   This is why every Function in this project (Supabase client *and*
+   Stripe client) is a hand-written `fetch()`-based wrapper instead of an
+   SDK. Verified by running `npx wrangler pages functions build functions
+   --outdir=...` locally with `node_modules` renamed out of the way
+   first, to reproduce Cloudflare's real build environment exactly — this
+   is the standard pre-deploy check for any change under `functions/`.
 
 ## What's deliberately still inactive
 
-- No live Stripe/PayPal/Square credentials, no real checkout.
+- Stripe is Sandbox/test-mode only — `assertSandboxMode()` refuses a
+  non-`sk_test_` key unless `STRIPE_MODE=live` is explicitly set.
+- No PayPal/Square credentials, no real checkout through either.
+- Stripe Tax is wired but defaults off (`STRIPE_AUTOMATIC_TAX` unset) —
+  CA seller's-permit registration isn't complete yet.
 - No live shipping-label purchasing.
 - No real customer email delivery.
-- The real checkout Cloudflare Pages Function (see above) isn't in this deploy at all right now — pulled after it appeared to block the whole build; re-add from git history once Functions compatibility is resolved.
-- A scheduled reservation-expiry sweep (Cloudflare Cron Trigger) isn't configured.
+- A scheduled reservation-expiry sweep (Cloudflare Cron Trigger) isn't
+  configured — correctness doesn't depend on it (see Inventory
+  reservations above), it's a cleanup-pass nice-to-have.
 
 ## Manual follow-up required
 
 1. Run `supabase/migrations/005_orders_fulfillment.sql` in the Supabase
    SQL editor (Dashboard → SQL Editor) — nothing here works until this
    migration is applied.
-2. When ready to connect a real payment provider: follow the handoff
-   checklist at the top of `payments/providers/stripeProvider.js` or
-   `paypalProvider.js`.
-3. When ready to connect label purchasing: follow the same pattern in
+2. Configure Stripe Sandbox secrets in Cloudflare Pages → this project →
+   Settings → Environment variables (Production), as encrypted secrets,
+   never committed to the repo: `STRIPE_SECRET_KEY` (Stripe Dashboard →
+   Developers → API keys → Secret key, Sandbox/test mode — starts
+   `sk_test_...`) and `STRIPE_WEBHOOK_SECRET` (created in the next step).
+3. In the Stripe Dashboard (Sandbox/test mode), create a webhook
+   destination pointing at `https://creaturecorner.art/api/webhooks/stripe`,
+   subscribed to: `checkout.session.completed`,
+   `checkout.session.async_payment_succeeded`, `checkout.session.expired`,
+   `checkout.session.async_payment_failed`, `payment_intent.payment_failed`,
+   `charge.refunded`. Copy its signing secret into Cloudflare as
+   `STRIPE_WEBHOOK_SECRET`, then send a test event from the Stripe
+   Dashboard and confirm it returns `200`.
+4. When ready to connect PayPal: follow the handoff checklist at the top
+   of `payments/providers/paypalProvider.js`.
+5. When ready to connect label purchasing: follow the same pattern in
    `shipping/providers/easypostLabelProvider.js` or `shippoLabelProvider.js`.
-4. Configure a Cloudflare Cron Trigger to call `release_expired_reservations()`
+6. Configure a Cloudflare Cron Trigger to call `release_expired_reservations()`
    periodically once real checkout traffic exists.
-5. Before building the real checkout function: check Cloudflare Pages →
-   this project → Settings → Functions for a "Compatibility flags" field
-   and add `nodejs_compat` (needed for `@supabase/supabase-js` in the
-   Workers runtime), or check the Deployments tab's build log for commit
-   `1cc5ce0` to confirm the actual failure. Once Functions work, restore
-   `functions/api/orders/create.js` from that commit (`git show
-   1cc5ce0:functions/api/orders/create.js`).
+7. Before enabling live payments: complete CA seller's-permit
+   registration, then set `STRIPE_AUTOMATIC_TAX=true`; separately swap in
+   a live Stripe key and set `STRIPE_MODE=live` only when actually ready
+   to accept real charges.

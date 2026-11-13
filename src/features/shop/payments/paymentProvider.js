@@ -29,17 +29,30 @@
  * @property {number} [amountCents]
  * @property {any} raw - the original provider payload, stored verbatim for auditability
  *
+ * @typedef {Object} OrderForSession
+ * @property {string} id
+ * @property {string} orderNumber
+ * @property {number} totalCents
+ * @property {number} shippingCents
+ * @property {number} taxCents
+ * @property {string} currency
+ * @property {string} email
+ * @property {{name: string, unitPriceCents: number, quantity: number, imageUrl?: string}[]} items
+ * @property {string} successUrl
+ * @property {string} cancelUrl
+ *
  * @typedef {Object} PaymentProvider
  * @property {string} name
- * @property {(order: {id: string, totalCents: number, currency: string, email: string}) => Promise<PaymentSession>} createSession
+ * @property {(order: OrderForSession, env: Record<string,string>) => Promise<PaymentSession>} createSession
  *   Creates a payment session/order with the provider for the given internal order. Never called from the browser for a real provider.
- * @property {(request: {headers: Record<string,string>, rawBody: string}, secret: string) => boolean} verifyWebhookSignature
- *   Verifies a webhook request actually came from the provider, using the provider's documented signing scheme. Must be checked before trusting ANY webhook payload — see Payment Security requirements.
- * @property {(request: {headers: Record<string,string>, rawBody: string}) => PaymentEvent} parseWebhookEvent
+ *   `env` carries whatever server-side secrets this provider needs (e.g. env.STRIPE_SECRET_KEY) — passed through from the Cloudflare Pages Function's context, never hardcoded to one provider's credential shape.
+ * @property {(rawBody: string, signatureHeader: string, secret: string) => boolean|Promise<boolean>} verifyWebhookSignature
+ *   Verifies a webhook request actually came from the provider, using the provider's documented signing scheme, against the RAW (unparsed) request body. Must be checked before trusting ANY webhook payload — see Payment Security requirements.
+ * @property {(rawBody: string) => PaymentEvent} parseWebhookEvent
  *   Parses an already-signature-verified webhook body into the normalized PaymentEvent shape.
- * @property {(reference: string) => Promise<{status: string, amountCents: number, raw: any}>} getTransaction
+ * @property {(reference: string, env: Record<string,string>) => Promise<{status: string, amountCents: number, raw: any}>} getTransaction
  *   Server-side re-fetch of a transaction's authoritative status directly from the provider — never trust a client-supplied "payment succeeded" flag; always re-verify like this (or via a verified webhook) before marking an order paid.
- * @property {(reference: string, amountCents?: number) => Promise<{refundReference: string, amountCents: number}>} refund
+ * @property {(reference: string, amountCents: number|undefined, env: Record<string,string>) => Promise<{refundReference: string, amountCents: number}>} refund
  *   Full refund if amountCents is omitted, partial refund otherwise.
  */
 

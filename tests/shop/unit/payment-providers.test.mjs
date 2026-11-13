@@ -24,13 +24,13 @@ test('testProvider.createSession never touches a real network — returns a fake
 });
 
 test('testProvider.verifyWebhookSignature only "verifies" an exact shared-secret match', () => {
-  assert.equal(testProvider.verifyWebhookSignature({ headers: { 'x-test-signature': 'abc' }, rawBody: '{}' }, 'abc'), true);
-  assert.equal(testProvider.verifyWebhookSignature({ headers: { 'x-test-signature': 'wrong' }, rawBody: '{}' }, 'abc'), false);
-  assert.equal(testProvider.verifyWebhookSignature({ headers: {}, rawBody: '{}' }, 'abc'), false);
+  assert.equal(testProvider.verifyWebhookSignature('{}', 'abc', 'abc'), true);
+  assert.equal(testProvider.verifyWebhookSignature('{}', 'wrong', 'abc'), false);
+  assert.equal(testProvider.verifyWebhookSignature('{}', '', 'abc'), false);
 });
 
 test('testProvider.parseWebhookEvent normalizes the payload into the PaymentEvent shape', () => {
-  const event = testProvider.parseWebhookEvent({ headers: {}, rawBody: JSON.stringify({ type: 'payment.succeeded', reference: 'ref-1', amountCents: 500 }) });
+  const event = testProvider.parseWebhookEvent(JSON.stringify({ type: 'payment.succeeded', reference: 'ref-1', amountCents: 500 }));
   assert.equal(event.provider, 'test');
   assert.equal(event.type, 'payment.succeeded');
   assert.equal(event.reference, 'ref-1');
@@ -44,14 +44,19 @@ test('testProvider.refund returns a fake refund reference, never calls a real ne
   assert.equal(refund.amountCents, 1000);
 });
 
-test('stripeProvider and paypalProvider are not configured — every method throws ProviderNotConfiguredError, never silently succeeds', async () => {
-  for (const provider of [stripeProvider, paypalProvider]) {
-    await assert.rejects(() => provider.createSession({}), ProviderNotConfiguredError);
-    assert.throws(() => provider.verifyWebhookSignature({}, 'secret'), ProviderNotConfiguredError);
-    assert.throws(() => provider.parseWebhookEvent({}), ProviderNotConfiguredError);
-    await assert.rejects(() => provider.getTransaction('ref'), ProviderNotConfiguredError);
-    await assert.rejects(() => provider.refund('ref'), ProviderNotConfiguredError);
-  }
+test('paypalProvider is not configured — every method throws ProviderNotConfiguredError, never silently succeeds', async () => {
+  await assert.rejects(() => paypalProvider.createSession({}), ProviderNotConfiguredError);
+  assert.throws(() => paypalProvider.verifyWebhookSignature('{}', 'sig', 'secret'), ProviderNotConfiguredError);
+  assert.throws(() => paypalProvider.parseWebhookEvent('{}'), ProviderNotConfiguredError);
+  await assert.rejects(() => paypalProvider.getTransaction('ref'), ProviderNotConfiguredError);
+  await assert.rejects(() => paypalProvider.refund('ref'), ProviderNotConfiguredError);
+});
+
+// stripeProvider is now a real implementation (see stripe-provider.test.mjs
+// for its full coverage) — it only throws ProviderNotConfiguredError
+// specifically when no secret key is supplied at all, not unconditionally.
+test('stripeProvider.createSession throws ProviderNotConfiguredError specifically when no secret key is configured', async () => {
+  await assert.rejects(() => stripeProvider.createSession({ items: [] }, {}), ProviderNotConfiguredError);
 });
 
 test('stripeProvider and paypalProvider are independent — neither routes through the other', () => {

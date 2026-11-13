@@ -162,14 +162,14 @@ test('choosing Shipping shows the full US address form (when shipping is offered
   await expect(page.getByText('United States only')).toBeVisible();
 });
 
-test('Continue to Payment stays disabled until required fields are filled, then shows the placeholder message without charging or creating an order', async ({ page }) => {
+test('Continue to Payment stays disabled until required fields are filled, then calls the real checkout endpoint without ever writing to orders/order_items directly from the browser', async ({ page }) => {
   const product = await getLiveTestProduct();
   test.skip(!product, 'no available/in-stock product exists right now to test against');
   test.skip(product.pickup_available !== true, 'needs a pickup-eligible product so the always-$0 path is testable regardless of shipping-rate configuration');
 
-  const postedToOrders = [];
+  const postedToOrdersTable = [];
   page.on('request', (req) => {
-    if (req.method() !== 'GET' && /\/rest\/v1\/(orders|order_items)/.test(req.url())) postedToOrders.push(req.url());
+    if (req.method() !== 'GET' && /\/rest\/v1\/(orders|order_items)/.test(req.url())) postedToOrdersTable.push(req.url());
   });
 
   await addProductToCart(page, product.slug);
@@ -184,12 +184,38 @@ test('Continue to Payment stays disabled until required fields are filled, then 
   await page.fill('[data-field="email"]', 'test@example.com');
   await expect(continueBtn).toBeEnabled();
 
+  const checkoutResponse = page.waitForResponse((res) => res.url().includes('/api/orders/create'));
   await continueBtn.click();
-  await expect(page.locator('#payment-placeholder-msg')).toBeVisible();
-  await expect(page.locator('#payment-placeholder-msg')).toContainText('not enabled yet');
-  await expect(continueBtn).toBeDisabled();
+  const res = await checkoutResponse;
 
-  expect(postedToOrders, 'a write to orders/order_items happened — Stage 6 must never create a real order').toEqual([]);
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    // Local/CI e2e runs against `npx serve .` (see playwright.config.js),
+    // which has no Cloudflare Pages Functions runtime at all — /api/* 404s
+    // with an HTML body there, not JSON. Production is verified directly
+    // against the real deployed Function instead (see docs/
+    // ORDERS_FULFILLMENT_ARCHITECTURE.md's manual verification notes).
+  }
+
+  if (res.ok() && body?.redirectUrl) {
+    // Stripe secrets are fully configured in this environment — the
+    // browser should be sent to Stripe's own hosted domain, never
+    // anywhere that looks like a fake "payment succeeded" page this site
+    // generated itself.
+    expect(body.redirectUrl).toMatch(/^https:\/\/checkout\.stripe\.com\//);
+  } else {
+    // Expected in both remaining cases — secrets not yet configured
+    // (production today, fails closed with a 503) or no Functions runtime
+    // at all (local/CI) — either way checkout must not silently "succeed":
+    // no redirect, cart stays put, a clear error is shown.
+    await expect(page.locator('#checkout-error-msg')).toBeVisible();
+    await expect(continueBtn).toBeEnabled();
+    expect(page.url()).toContain('/cart');
+  }
+
+  expect(postedToOrdersTable, 'the browser itself must never write to orders/order_items directly — only the server-side Function (with the service-role key) may').toEqual([]);
 });
 
 test('mobile: cart page has no horizontal scroll and controls are usable', async ({ page }, testInfo) => {

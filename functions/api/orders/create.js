@@ -1,42 +1,33 @@
 /**
- * SCAFFOLD — NOT WIRED TO ANY LIVE PAGE, NOT VERIFIED END-TO-END.
+ * Real customer checkout endpoint — creates an order, reserves inventory
+ * atomically, and starts a Stripe Checkout Session. Wired to pages/cart.js's
+ * "Continue to Payment" button. Stripe Sandbox only until STRIPE_MODE is
+ * explicitly "live" (enforced in stripeProvider.js's assertSandboxMode,
+ * not just by convention).
  *
- * pages/cart.js's "Continue to Payment" button does not call this; it is
- * still exactly the placeholder it always was (see
- * docs/ORDERS_FULFILLMENT_ARCHITECTURE.md). This file exists to show the
- * real shape of the future checkout endpoint — re-fetch authoritative
- * product data, validate, reserve inventory atomically, compute totals
- * server-side, create the order — using the exact same pure modules
- * (order/orderTotals.js, order/orderNumber.js, payments/providerRegistry.js)
- * the admin test-order tool already uses and that are already unit
- * tested.
+ * Talks to Supabase via plain fetch() against its REST/RPC API, not the
+ * @supabase/supabase-js SDK — this project's Cloudflare Pages build has no
+ * configured build command, so node_modules never exists on Cloudflare's
+ * build machine before the Functions bundler runs; any npm-resolved
+ * import fails there ("Could not resolve") even though it works locally
+ * (see docs/ORDERS_FULFILLMENT_ARCHITECTURE.md for the full story).
  *
- * Talks to Supabase via plain fetch() against its REST/RPC API instead of
- * the @supabase/supabase-js SDK: this project's Cloudflare Pages build
- * has no configured build command, so node_modules is never installed on
- * Cloudflare's build machine before the Functions bundler runs — any
- * npm-resolved import fails there with "Could not resolve" even though it
- * resolves fine locally (this repo's own node_modules already exists
- * here). Rather than add a build step this project has deliberately never
- * had (see CLAUDE.md: "No framework, no bundler, no build step"), this
- * Function has zero npm dependencies of its own — it only imports plain,
- * dependency-free local JS modules, which bundle from source with no
- * installation step needed, the same way every browser-side file in this
- * repo already does. Supabase's SDK is a thin wrapper over this exact
- * REST/RPC API; using it directly here isn't a workaround, it's removing
- * a dependency this one file never needed.
+ * Required Cloudflare Pages secrets:
+ *   SUPABASE_SERVICE_ROLE_KEY — bypasses RLS; never logged, never echoed back.
+ *   STRIPE_SECRET_KEY — sk_test_... in Sandbox; never logged, never echoed back.
+ * Optional:
+ *   STRIPE_MODE — must be exactly "live" to allow a non-sk_test_ key; absent/anything else keeps Sandbox-only enforcement.
+ *   STRIPE_AUTOMATIC_TAX — "true" to enable Stripe Tax; defaults off (see Sales Tax notes in the architecture doc).
  *
- * Required Cloudflare Pages secrets (not yet configured):
- *   SUPABASE_SERVICE_ROLE_KEY — bypasses RLS; never log it, never echo it
- *   back in a response, never expose it to the browser.
- *
- * Never trusts the browser for price, availability, or totals — every
- * number here is re-derived server-side from the live `products` table.
+ * Never trusts the browser for price, availability, shipping cost, or
+ * totals — every number here is re-derived server-side.
  */
 import { SUPABASE_URL } from '../../../src/features/shop/api/config.js';
 import { computeOrderTotals } from '../../../src/features/shop/order/orderTotals.js';
 import { formatOrderNumber, parseOrderNumber } from '../../../src/features/shop/order/orderNumber.js';
 import { getPaymentProvider } from '../../../src/features/shop/payments/providerRegistry.js';
+import { getShippingQuote } from '../../../src/features/shop/shipping/shippingProvider.js';
+import { determineFulfillmentOptions } from '../../../src/features/shop/cart/shippingRules.js';
 
 const PUBLIC_STATUSES = ['available'];
 
@@ -44,12 +35,7 @@ function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-/**
- * Minimal PostgREST client — just the handful of operations this
- * endpoint needs (select/insert/rpc/public-storage-URL), built on the
- * Workers-native fetch(), no SDK. Every request carries the service-role
- * key, which bypasses RLS entirely — this must only ever run server-side.
- */
+/** Minimal PostgREST client — see admin/ordersApi.js's docs for why this exists instead of the SDK. */
 function createSupabaseRest(url, serviceRoleKey) {
   const base = `${url}/rest/v1`;
   const authHeaders = { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` };
@@ -68,32 +54,31 @@ function createSupabaseRest(url, serviceRoleKey) {
   }
 
   return {
-    /** @param {string} table @param {string} select @param {Record<string,string>} [filters] */
     async select(table, select, filters = {}) {
       const params = new URLSearchParams({ select });
       for (const [key, value] of Object.entries(filters)) params.append(key, value);
       return request(`/${table}?${params.toString()}`);
     },
-    /** Count-only lookup (no rows needed) — Prefer: count=exact puts the total in the Content-Range response header. */
     async count(table, filters = {}) {
       const params = new URLSearchParams({ select: 'id' });
       for (const [key, value] of Object.entries(filters)) params.append(key, value);
       return request(`/${table}?${params.toString()}`, { headers: { Prefer: 'count=exact' } });
     },
-    /** @param {string} table @param {any} row */
     async insertOne(table, row) {
       const { data, error } = await request(`/${table}`, { method: 'POST', body: JSON.stringify(row), headers: { Prefer: 'return=representation' } });
       return { data: Array.isArray(data) ? data[0] : data, error };
     },
-    /** @param {string} table @param {any[]} rows */
     async insertMany(table, rows) {
       return request(`/${table}`, { method: 'POST', body: JSON.stringify(rows) });
     },
-    /** @param {string} fn @param {any} args */
+    async update(table, patch, filters) {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(filters)) params.append(key, value);
+      return request(`/${table}?${params.toString()}`, { method: 'PATCH', body: JSON.stringify(patch) });
+    },
     async rpc(fn, args) {
       return request(`/rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) });
     },
-    /** @param {string} bucket @param {string} path */
     getPublicUrl(bucket, path) {
       return `${url}/storage/v1/object/public/${bucket}/${path}`;
     },
@@ -103,10 +88,6 @@ function createSupabaseRest(url, serviceRoleKey) {
 /** @param {{request: Request, env: Record<string,string>}} context */
 export async function onRequestPost({ request, env }) {
   if (!env.SUPABASE_SERVICE_ROLE_KEY) {
-    // Fails loudly rather than silently falling back to the anon key,
-    // which would be RLS-blocked for an insert anyway — but failing
-    // explicitly here is the honest "not configured yet" signal this
-    // phase is supposed to produce, not a confusing downstream RLS error.
     return jsonResponse({ error: 'Checkout is not configured yet.' }, 503);
   }
 
@@ -117,14 +98,15 @@ export async function onRequestPost({ request, env }) {
     return jsonResponse({ error: 'Invalid request body.' }, 400);
   }
 
-  const { items, email, customerName, fulfillmentType, shippingAddress, paymentProvider } = input || {};
+  const { items, email, customerName, fulfillmentType, shippingAddress } = input || {};
   if (!Array.isArray(items) || items.length === 0) return jsonResponse({ error: 'No items in order.' }, 400);
   if (!email || !fulfillmentType) return jsonResponse({ error: 'Missing required fields.' }, 400);
+  if (fulfillmentType !== 'shipping' && fulfillmentType !== 'pickup') return jsonResponse({ error: 'Invalid fulfillment type.' }, 400);
 
   const db = createSupabaseRest(SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-  // Re-fetch every product server-side — the browser's prices/availability
-  // are never trusted (section C / Security requirements).
+  // Re-fetch every product server-side — the browser's prices/availability/
+  // shipping class are never trusted (Payment Security / section C).
   const productIds = items.map((i) => i.productId);
   const { data: products, error: productsError } = await db.select(
     'products',
@@ -137,7 +119,7 @@ export async function onRequestPost({ request, env }) {
   for (const requested of items) {
     const product = products.find((p) => p.id === requested.productId);
     if (!product || !PUBLIC_STATUSES.includes(product.status)) {
-      return jsonResponse({ error: `A product in your cart is no longer available.` }, 409);
+      return jsonResponse({ error: 'A product in your cart is no longer available.' }, 409);
     }
     const quantity = Number(requested.quantity) || 0;
     if (quantity <= 0 || quantity > product.quantity) {
@@ -151,16 +133,40 @@ export async function onRequestPost({ request, env }) {
       product_image_url: primary ? db.getPublicUrl('product-images', primary.storage_path) : null,
       unit_price_cents: product.price_cents,
       quantity,
+      shippingClass: product.shipping_class,
+      pickupAvailable: product.pickup_available,
     });
   }
 
+  // Same fulfillment-conflict rule pages/cart.js enforces client-side
+  // (determineFulfillmentOptions) — re-checked here because the browser's
+  // choice of fulfillmentType is never trusted.
+  const fulfillmentOptions = determineFulfillmentOptions(orderItemsPayload);
+  if (fulfillmentType === 'shipping' && !fulfillmentOptions.shippingAvailable) {
+    return jsonResponse({ error: 'This cart cannot be shipped — one or more items are local-pickup only.' }, 409);
+  }
+  if (fulfillmentType === 'pickup' && !fulfillmentOptions.pickupAvailable) {
+    return jsonResponse({ error: 'This cart cannot be picked up locally — one or more items must ship.' }, 409);
+  }
+
+  // Real, server-computed shipping — never assume free shipping, never
+  // trust a client-supplied amount (section F).
+  const { data: shippingClasses, error: shippingClassesError } = await db.select('shipping_classes', '*');
+  if (shippingClassesError) return jsonResponse({ error: 'Could not load shipping configuration.' }, 500);
+  const rateByClass = Object.fromEntries(shippingClasses.map((c) => [c.key, c.flat_price_cents]));
+  const shippingQuote = getShippingQuote({ items: orderItemsPayload, fulfillment: fulfillmentType, rateByClass });
+  if (!shippingQuote.configured) {
+    return jsonResponse({ error: shippingQuote.manualQuote ? 'One or more items need a custom shipping quote — contact us before checkout.' : 'Shipping is not yet configured for this order.' }, 409);
+  }
+
+  // Stripe Tax requires a completed, active tax registration (not done —
+  // see Sales Tax notes in docs/ORDERS_FULFILLMENT_ARCHITECTURE.md). Zero,
+  // explicitly, not omitted, until that's resolved and STRIPE_AUTOMATIC_TAX
+  // is turned on.
   const totals = computeOrderTotals({
     items: orderItemsPayload.map((i) => ({ priceCents: i.unit_price_cents, quantity: i.quantity })),
-    // Real shipping/tax calculation is out of scope for this scaffold —
-    // getShippingQuote (shipping/shippingProvider.js) already computes the
-    // flat-rate shipping number the cart displays; a real implementation
-    // re-derives it here the same way, server-side, rather than trusting it.
-    shippingCents: 0,
+    shippingCents: shippingQuote.cents,
+    taxCents: 0,
   });
 
   const now = new Date();
@@ -187,7 +193,7 @@ export async function onRequestPost({ request, env }) {
       tax_cents: totals.taxCents,
       discount_cents: totals.discountCents,
       total_cents: totals.totalCents,
-      payment_provider: paymentProvider,
+      payment_provider: 'stripe',
       payment_status: 'pending',
       fulfillment_status: 'unfulfilled',
       shipping_status: 'label_not_purchased',
@@ -208,22 +214,50 @@ export async function onRequestPost({ request, env }) {
     return jsonResponse({ error: 'Could not create order.' }, 500);
   }
 
-  const { error: itemsError } = await db.insertMany('order_items', orderItemsPayload.map((i) => ({ ...i, order_id: order.id })));
+  const { error: itemsError } = await db.insertMany('order_items', orderItemsPayload.map(({ shippingClass, pickupAvailable, ...i }) => ({ ...i, order_id: order.id })));
   if (itemsError) return jsonResponse({ error: 'Could not create order items.' }, 500);
 
   for (const i of items) {
-    const { error } = await db.rpc('reserve_inventory', { p_product_id: i.productId, p_quantity: i.quantity, p_order_id: order.id, p_ttl_minutes: 15 });
+    const { error } = await db.rpc('reserve_inventory', { p_product_id: i.productId, p_quantity: i.quantity, p_order_id: order.id, p_ttl_minutes: 30 });
     if (error) return jsonResponse({ error: `Could not reserve inventory: ${error.message}` }, 409);
   }
 
+  const origin = new URL(request.url).origin;
   try {
-    const provider = getPaymentProvider(paymentProvider);
-    const session = await provider.createSession({ id: order.id, totalCents: totals.totalCents, currency: 'usd', email });
-    return jsonResponse({ orderId: order.id, orderNumber, session });
+    const provider = getPaymentProvider('stripe');
+    const session = await provider.createSession(
+      {
+        id: order.id,
+        orderNumber,
+        totalCents: totals.totalCents,
+        shippingCents: totals.shippingCents,
+        taxCents: totals.taxCents,
+        currency: 'usd',
+        email,
+        items: orderItemsPayload.map((i) => ({ name: i.product_name, unitPriceCents: i.unit_price_cents, quantity: i.quantity, imageUrl: i.product_image_url })),
+        // {CHECKOUT_SESSION_ID} is a literal Stripe template placeholder —
+        // Stripe substitutes it, this code never generates its own value.
+        successUrl: `${origin}/order-confirmation?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${origin}/cart?checkout=cancelled`,
+      },
+      env
+    );
+
+    let { error: refError } = await db.update('orders', { payment_reference: session.reference }, { id: `eq.${order.id}` });
+    if (refError) {
+      // functions/api/orders/status.js looks orders up by payment_reference
+      // for the order-confirmation page — a transient failure here would
+      // otherwise strand that page even though the order/session are fine.
+      ({ error: refError } = await db.update('orders', { payment_reference: session.reference }, { id: `eq.${order.id}` }));
+      if (refError) console.error('Could not persist payment_reference for order', order.id, session.reference, refError);
+    }
+
+    return jsonResponse({ orderId: order.id, orderNumber, redirectUrl: session.redirectUrl });
   } catch (err) {
-    // Provider not configured yet — the order row and its reservations
+    // Provider not configured/refused — the order row and its reservations
     // still exist, correctly in 'pending'. An admin can release the
-    // reservation via Admin -> Orders if this needs cleaning up.
+    // reservation via Admin -> Orders if this needs cleaning up; nothing
+    // was charged, nothing was lost.
     return jsonResponse({ error: err instanceof Error ? err.message : 'Payment provider is not available.', orderId: order.id }, 503);
   }
 }

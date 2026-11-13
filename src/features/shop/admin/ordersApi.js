@@ -218,7 +218,18 @@ export async function adminConfirmTestPayment(orderId) {
     if (error) throw error;
   }
 
-  const session = await testProvider.createSession({ id: order.id, totalCents: order.totalCents, currency: order.currency, email: order.email });
+  const session = await testProvider.createSession({
+    id: order.id,
+    orderNumber: order.orderNumber,
+    totalCents: order.totalCents,
+    shippingCents: order.shippingCents,
+    taxCents: order.taxCents,
+    currency: order.currency,
+    email: order.email,
+    items: order.items.map((i) => ({ name: i.name, unitPriceCents: i.unitPriceCents, quantity: i.quantity, imageUrl: i.thumbnailUrl })),
+    successUrl: '',
+    cancelUrl: '',
+  });
   const { error } = await supabase
     .from('orders')
     .update({ payment_status: 'paid', payment_reference: session.reference, paid_at: new Date().toISOString(), status: 'paid' })

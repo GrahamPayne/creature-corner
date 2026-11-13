@@ -23,8 +23,8 @@ function randomId(prefix) {
 export const testProvider = {
   name: 'test',
 
-  /** @param {{id: string, totalCents: number, currency: string, email: string}} order */
-  async createSession(order) {
+  /** @param {import('../paymentProvider.js').OrderForSession} order @param {Record<string,string>} [env] */
+  async createSession(order, env) {
     return {
       provider: 'test',
       reference: randomId('test_session'),
@@ -39,16 +39,15 @@ export const testProvider = {
    * real provider does, and so the admin-only "simulate a webhook"
    * regression test can exercise the same code path a real provider's
    * webhook handler would.
-   * @param {{headers: Record<string,string>, rawBody: string}} request
-   * @param {string} secret
+   * @param {string} rawBody @param {string} signatureHeader @param {string} secret
    */
-  verifyWebhookSignature(request, secret) {
-    return request.headers?.['x-test-signature'] === secret;
+  verifyWebhookSignature(rawBody, signatureHeader, secret) {
+    return signatureHeader === secret;
   },
 
-  /** @param {{headers: Record<string,string>, rawBody: string}} request */
-  parseWebhookEvent(request) {
-    const body = JSON.parse(request.rawBody);
+  /** @param {string} rawBody */
+  parseWebhookEvent(rawBody) {
+    const body = JSON.parse(rawBody);
     return {
       provider: 'test',
       providerEventId: body.eventId || randomId('test_evt'),
@@ -59,15 +58,15 @@ export const testProvider = {
     };
   },
 
-  /** @param {string} reference */
-  async getTransaction(reference) {
+  /** @param {string} reference @param {Record<string,string>} [env] */
+  async getTransaction(reference, env) {
     // Test mode has no external ledger to re-query — admin-confirmed is the
     // only "verification" that exists, recorded directly on the order row.
     return { status: 'test_confirmed', amountCents: 0, raw: { reference } };
   },
 
-  /** @param {string} reference @param {number} [amountCents] */
-  async refund(reference, amountCents) {
+  /** @param {string} reference @param {number} [amountCents] @param {Record<string,string>} [env] */
+  async refund(reference, amountCents, env) {
     return { refundReference: randomId('test_refund'), amountCents: amountCents ?? 0 };
   },
 };

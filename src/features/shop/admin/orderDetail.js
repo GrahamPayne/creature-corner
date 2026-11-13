@@ -118,7 +118,7 @@ export function createOrderDetail(order, opts) {
       ${order.refundedAt ? `<p>Fully refunded: ${new Date(order.refundedAt).toLocaleString()}</p>` : ''}
       <div class="admin-form-actions">
         ${order.testMode && order.paymentStatus === 'pending' ? '<button type="button" class="admin-btn admin-btn-primary" data-action="confirm-test-payment">Confirm Test Payment</button>' : ''}
-        ${canRefundOrder(order) ? `<button type="button" class="admin-btn admin-btn-danger" data-action="refund" ${order.testMode ? '' : 'disabled title="No real payment provider is connected yet"'}>Refund</button>` : ''}
+        ${canRefundOrder(order) ? `<button type="button" class="admin-btn admin-btn-danger" data-action="refund" ${order.testMode ? '' : 'disabled title="Refund real Stripe orders directly in the Stripe Dashboard for now — this button is Test Mode only. A refunded charge still reconciles into this order automatically (see the Stripe webhook)."'}>Refund</button>` : ''}
       </div>
     </div>
 

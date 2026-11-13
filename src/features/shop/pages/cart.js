@@ -168,14 +168,12 @@ function render(entries, products, shippingClasses) {
         <button type="button" class="btn btn-primary cart-continue-btn" id="continue-to-payment-btn" ${canContinue ? '' : 'disabled'}>
           Continue to Payment
         </button>
-        <p id="payment-placeholder-msg" class="product-note" hidden>
-          Payments are not enabled yet. Checkout will be completed in a future update — nothing has been charged.
-        </p>
+        <p id="checkout-error-msg" class="product-note cart-notice-error" hidden></p>
       </section>
     `}
   `;
 
-  wireEvents(entries, products, shippingClasses);
+  wireEvents(entries, products, shippingClasses, availableLines);
 }
 
 function renderShippingAddressForm() {
@@ -212,7 +210,7 @@ function addressValid(fulfillment) {
   return Boolean(a.fullName.trim() && a.email.trim() && a.line1.trim() && a.city.trim() && a.state.trim() && a.zip.trim());
 }
 
-function wireEvents(entries, products, shippingClasses) {
+function wireEvents(entries, products, shippingClasses, availableLines) {
   mount.querySelectorAll('[data-remove]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-remove');
@@ -262,23 +260,81 @@ function wireEvents(entries, products, shippingClasses) {
     });
   });
 
-  const continueBtn = document.getElementById('continue-to-payment-btn');
-  continueBtn?.addEventListener('click', () => {
-    // Stage 7 note: this is a placeholder only. The eventual payment
-    // server must NEVER trust the browser's subtotal, item prices,
-    // shipping amount, or inventory counts — it has to re-fetch every
-    // product from Supabase, re-check status/quantity, and recompute the
-    // shipping class and total itself before creating a Stripe Checkout
-    // Session. Nothing here is authoritative; it's UI only.
-    continueBtn.setAttribute('disabled', '');
-    const msg = document.getElementById('payment-placeholder-msg');
-    if (msg) msg.hidden = false;
-  });
+  const continueBtn = /** @type {HTMLButtonElement} */ (document.getElementById('continue-to-payment-btn'));
+  continueBtn?.addEventListener('click', () => startCheckout(continueBtn, availableLines));
+}
+
+/**
+ * POSTs to the real checkout endpoint and redirects to Stripe's hosted
+ * page. Nothing here is authoritative — functions/api/orders/create.js
+ * re-fetches every product, re-checks stock/status, and recomputes
+ * shipping/totals itself before ever creating a Stripe session; this
+ * function only collects what the customer typed and reports whatever
+ * the server decides, including its errors.
+ * @param {HTMLButtonElement} continueBtn
+ * @param {any[]} availableLines
+ */
+async function startCheckout(continueBtn, availableLines) {
+  const errorMsg = /** @type {HTMLElement} */ (document.getElementById('checkout-error-msg'));
+  if (errorMsg) errorMsg.hidden = true;
+  continueBtn.disabled = true;
+  const originalLabel = continueBtn.textContent;
+  continueBtn.textContent = 'Redirecting to secure checkout…';
+
+  try {
+    const res = await fetch('/api/orders/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: availableLines.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
+        email: formState.address.email,
+        customerName: formState.address.fullName,
+        fulfillmentType: formState.fulfillment,
+        shippingAddress: formState.fulfillment === 'shipping'
+          ? { line1: formState.address.line1, line2: formState.address.line2, city: formState.address.city, state: formState.address.state, zip: formState.address.zip }
+          : undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.redirectUrl) {
+      throw new Error(data?.error || 'Could not start checkout. Please try again.');
+    }
+    window.location.href = data.redirectUrl;
+  } catch (err) {
+    console.error('Checkout failed', err);
+    continueBtn.disabled = false;
+    continueBtn.textContent = originalLabel;
+    if (errorMsg) {
+      errorMsg.textContent = err instanceof Error ? err.message : 'Something went wrong starting checkout. Please try again.';
+      errorMsg.hidden = false;
+    }
+  }
+}
+
+/**
+ * Stripe's cancel_url brings the customer back here with ?checkout=cancelled
+ * — the order it created stays 'pending' with its reservation intact until
+ * Stripe's own checkout.session.expired webhook releases it (see
+ * functions/api/webhooks/stripe.js); nothing here needs to undo anything,
+ * this is purely a "your cart is still here, nothing was charged" notice.
+ * The query param is stripped immediately so a refresh doesn't re-show it.
+ */
+function showCancelledNoticeIfPresent() {
+  const url = new URL(location.href);
+  if (url.searchParams.get('checkout') !== 'cancelled') return;
+  url.searchParams.delete('checkout');
+  history.replaceState(null, '', url);
+
+  const notice = document.createElement('p');
+  notice.className = 'cart-notice';
+  notice.textContent = 'Checkout was cancelled — your cart is unchanged and nothing was charged.';
+  mount.before(notice);
 }
 
 async function init() {
   const entries = readCart();
   syncNavBadge();
+  showCancelledNoticeIfPresent();
 
   if (entries.length === 0) {
     renderEmpty();

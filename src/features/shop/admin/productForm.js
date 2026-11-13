@@ -163,21 +163,21 @@ export function createProductForm({ categories, product, shippingRates = {}, onS
       <p class="admin-notice">Enter the final packed box dimensions and weight, not the artwork dimensions.</p>
       <div class="admin-form-row">
         <label>Weight — lb
-          <input type="number" name="packedWeightLb" min="0" step="0.1" value="${product?.packedWeightLb ?? 0}">
+          <input type="number" name="packedWeightLb" min="0" step="any" value="${product?.packedWeightLb ?? 0}">
         </label>
         <label>Weight — oz
-          <input type="number" name="packedWeightOz" min="0" max="15" step="1" value="${product?.packedWeightOz ?? 0}">
+          <input type="number" name="packedWeightOz" min="0" max="15" step="any" value="${product?.packedWeightOz ?? 0}">
         </label>
       </div>
       <div class="admin-form-row">
         <label>Length (in)
-          <input type="number" name="packageLengthIn" min="0" step="0.1" value="${product?.packageLengthIn ?? ''}">
+          <input type="number" name="packageLengthIn" min="0" step="any" value="${product?.packageLengthIn ?? ''}">
         </label>
         <label>Width (in)
-          <input type="number" name="packageWidthIn" min="0" step="0.1" value="${product?.packageWidthIn ?? ''}">
+          <input type="number" name="packageWidthIn" min="0" step="any" value="${product?.packageWidthIn ?? ''}">
         </label>
         <label>Height (in)
-          <input type="number" name="packageHeightIn" min="0" step="0.1" value="${product?.packageHeightIn ?? ''}">
+          <input type="number" name="packageHeightIn" min="0" step="any" value="${product?.packageHeightIn ?? ''}">
         </label>
       </div>
     </div>

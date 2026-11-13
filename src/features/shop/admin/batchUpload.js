@@ -329,11 +329,11 @@ export function createBatchUpload({ categories, products, shippingRates, onCreat
           </label>
         </div>
         <div class="admin-form-row">
-          <label>Weight — lb <input type="number" id="shared-packedWeightLb" min="0" step="0.1" value="${shared.packedWeightLb}"></label>
-          <label>Weight — oz <input type="number" id="shared-packedWeightOz" min="0" max="15" step="1" value="${shared.packedWeightOz}"></label>
-          <label>Length (in) <input type="number" id="shared-packageLengthIn" min="0" step="0.1" value="${shared.packageLengthIn ?? ''}"></label>
-          <label>Width (in) <input type="number" id="shared-packageWidthIn" min="0" step="0.1" value="${shared.packageWidthIn ?? ''}"></label>
-          <label>Height (in) <input type="number" id="shared-packageHeightIn" min="0" step="0.1" value="${shared.packageHeightIn ?? ''}"></label>
+          <label>Weight — lb <input type="number" id="shared-packedWeightLb" min="0" step="any" value="${shared.packedWeightLb}"></label>
+          <label>Weight — oz <input type="number" id="shared-packedWeightOz" min="0" max="15" step="any" value="${shared.packedWeightOz}"></label>
+          <label>Length (in) <input type="number" id="shared-packageLengthIn" min="0" step="any" value="${shared.packageLengthIn ?? ''}"></label>
+          <label>Width (in) <input type="number" id="shared-packageWidthIn" min="0" step="any" value="${shared.packageWidthIn ?? ''}"></label>
+          <label>Height (in) <input type="number" id="shared-packageHeightIn" min="0" step="any" value="${shared.packageHeightIn ?? ''}"></label>
         </div>
 
         <label class="admin-form-checkbox">
@@ -569,11 +569,11 @@ export function createBatchUpload({ categories, products, shippingRates, onCreat
             </label>
           </div>
           <div class="admin-form-row">
-            <label>Weight — lb ${reset('packedWeightLb')}<input type="number" min="0" step="0.1" data-field="packedWeightLb" value="${Number(effectiveValue(item, 'packedWeightLb')) || 0}"></label>
-            <label>Weight — oz ${reset('packedWeightOz')}<input type="number" min="0" max="15" step="1" data-field="packedWeightOz" value="${Number(effectiveValue(item, 'packedWeightOz')) || 0}"></label>
-            <label>Length (in) ${reset('packageLengthIn')}<input type="number" min="0" step="0.1" data-field="packageLengthIn" value="${effectiveValue(item, 'packageLengthIn') ?? ''}"></label>
-            <label>Width (in) ${reset('packageWidthIn')}<input type="number" min="0" step="0.1" data-field="packageWidthIn" value="${effectiveValue(item, 'packageWidthIn') ?? ''}"></label>
-            <label>Height (in) ${reset('packageHeightIn')}<input type="number" min="0" step="0.1" data-field="packageHeightIn" value="${effectiveValue(item, 'packageHeightIn') ?? ''}"></label>
+            <label>Weight — lb ${reset('packedWeightLb')}<input type="number" min="0" step="any" data-field="packedWeightLb" value="${Number(effectiveValue(item, 'packedWeightLb')) || 0}"></label>
+            <label>Weight — oz ${reset('packedWeightOz')}<input type="number" min="0" max="15" step="any" data-field="packedWeightOz" value="${Number(effectiveValue(item, 'packedWeightOz')) || 0}"></label>
+            <label>Length (in) ${reset('packageLengthIn')}<input type="number" min="0" step="any" data-field="packageLengthIn" value="${effectiveValue(item, 'packageLengthIn') ?? ''}"></label>
+            <label>Width (in) ${reset('packageWidthIn')}<input type="number" min="0" step="any" data-field="packageWidthIn" value="${effectiveValue(item, 'packageWidthIn') ?? ''}"></label>
+            <label>Height (in) ${reset('packageHeightIn')}<input type="number" min="0" step="any" data-field="packageHeightIn" value="${effectiveValue(item, 'packageHeightIn') ?? ''}"></label>
           </div>
           <label class="admin-form-checkbox">
             <input type="checkbox" data-field="featured" ${effectiveValue(item, 'featured') ? 'checked' : ''}>

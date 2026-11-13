@@ -119,4 +119,61 @@ test.describe('Batch Upload — offline harness (no Supabase)', () => {
     // Must still be on the editing view, not a frozen progress screen.
     await expect(page.locator('#batch-submit-btn')).toBeVisible();
   });
+
+  test('the shared packed-weight-oz field accepts a fractional value like 0.76 (decimal weight fix)', async ({ page }) => {
+    await page.goto(HARNESS_URL);
+    await page.waitForFunction(() => window.__batchReady === true);
+
+    const ozInput = page.locator('#shared-packedWeightOz');
+    await ozInput.fill('0.76');
+    // checkValidity() is the browser's own HTML5 constraint check — this is
+    // exactly what used to fail with step="1" ("the two nearest valid
+    // values are 0 and 1"). step="any" removes that constraint entirely.
+    expect(await ozInput.evaluate((el) => el.checkValidity())).toBe(true);
+
+    await page.setInputFiles('#batch-file-input', [fakeImage('a.jpg')]);
+    await page.fill('#shared-nameBase', 'Creature Lighter');
+    await page.fill('#shared-priceCents', '25');
+    await page.selectOption('#shared-categoryId', 'cat-1');
+    await page.click('#batch-submit-btn');
+
+    await expect(page.locator('#batch-progress-summary')).toContainText('1 of 1 product created successfully', { timeout: 10_000 });
+    const creates = await page.evaluate(() => window.__calls.creates);
+    // The exact decimal must survive into the created product's fields —
+    // not rounded, not truncated.
+    expect(creates[0].packedWeightOz).toBe(0.76);
+  });
+
+  test('a per-item packed-weight-oz override also accepts fractional values', async ({ page }) => {
+    await page.goto(HARNESS_URL);
+    await page.waitForFunction(() => window.__batchReady === true);
+
+    await page.setInputFiles('#batch-file-input', [fakeImage('a.jpg')]);
+    await page.fill('#shared-nameBase', 'Creature Lighter');
+    await page.fill('#shared-priceCents', '25');
+    await page.selectOption('#shared-categoryId', 'cat-1');
+
+    await page.click('[data-act="expand"]');
+    const ozOverride = page.locator('[data-field="packedWeightOz"]');
+    await ozOverride.fill('1.25');
+    expect(await ozOverride.evaluate((el) => el.checkValidity())).toBe(true);
+
+    await page.click('#batch-submit-btn');
+    await expect(page.locator('#batch-progress-summary')).toContainText('1 of 1 product created successfully', { timeout: 10_000 });
+    const creates = await page.evaluate(() => window.__calls.creates);
+    expect(creates[0].packedWeightOz).toBe(1.25);
+  });
+
+  test('quantity remains a whole-number field and still rejects a negative value', async ({ page }) => {
+    await page.goto(HARNESS_URL);
+    await page.waitForFunction(() => window.__batchReady === true);
+
+    const qtyInput = page.locator('#shared-quantity');
+    await qtyInput.fill('-3');
+    expect(await qtyInput.evaluate((el) => el.checkValidity())).toBe(false);
+
+    const ozInput = page.locator('#shared-packedWeightOz');
+    await ozInput.fill('-1.5');
+    expect(await ozInput.evaluate((el) => el.checkValidity())).toBe(false);
+  });
 });

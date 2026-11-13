@@ -27,6 +27,53 @@
     font-size: 0.95rem;
 }
 
+/* Shop category overview tiles — visually similar to Gallery's section
+   cards (.gallery-section-card), but kept in their own shop-prefixed
+   classes on top of the generic .specimen-card/.specimen-image box
+   already used by product cards. Deliberately not sharing Gallery's
+   classes or data: these are shop categories, not gallery sections. */
+.shop-category-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+
+.shop-category-info {
+    padding: 16px 20px;
+    text-align: center;
+}
+
+.shop-category-name {
+    display: block;
+    font-family: var(--catalog-font);
+    font-size: 0.95rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+
+.shop-category-count {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    margin-top: 6px;
+}
+
+.shop-back-link {
+    display: inline-block;
+    margin: -20px 0 30px;
+    font-family: var(--catalog-font);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.shop-back-link:hover {
+    color: var(--accent);
+}
+
 /* Product detail image gallery (replaces the old 3D model-viewer slot) */
 .product-gallery {
     margin-bottom: 40px;

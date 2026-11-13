@@ -1,10 +1,16 @@
 // E2E tests for the public shop and product pages against the real,
 // connected Supabase project (see docs/SHOP_SETUP.md). The products table
-// is managed through /admin and can be empty or change at any time, so
-// these test structural/behavioral correctness rather than hardcoding
-// specific product counts or content — except for a couple of tests that
-// only run when supabase/seed-sample-products.sql has been applied (they
-// skip themselves with a clear reason otherwise).
+// is managed through /admin and can change at any time, so these test
+// structural/behavioral correctness rather than hardcoding specific
+// category names or product counts — except a couple of tests that only
+// run when supabase/seed-sample-products.sql has been applied (they skip
+// themselves with a clear reason otherwise).
+//
+// /shop is a category-overview landing page (one tile per category that
+// currently has at least one publicly visible product) that drills into
+// /shop?category=<slug> for that category's products — mirrors Gallery's
+// /gallery -> /gallery?section=<slug> pattern. See
+// src/features/shop/pages/shop.js and categoryTiles.js.
 const { test, expect } = require('@playwright/test');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -18,45 +24,140 @@ async function getLiveCategories() {
   return data || [];
 }
 
-/** Category slugs with at least one publicly-visible (available/sold) product — the Stage 6.75 rule for which filter buttons /shop should show. @returns {Promise<Set<string>>} */
-async function getCategorySlugsWithPublishedProducts() {
+/** Category slug -> count of publicly-visible (available/sold) products — the same rule categoryTiles.js applies. */
+async function getLiveCategoryCounts() {
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const { data } = await supabase
     .from('products')
     .select('category:categories(slug)')
     .in('status', ['available', 'sold']);
-  return new Set((data || []).map((p) => p.category?.slug).filter(Boolean));
+  const counts = new Map();
+  for (const row of data || []) {
+    const slug = row.category?.slug;
+    if (!slug) continue;
+    counts.set(slug, (counts.get(slug) || 0) + 1);
+  }
+  return counts;
 }
 
-test.describe('Shop page', () => {
+test.describe('Shop overview (/shop)', () => {
   test.beforeEach(async ({ page }) => {
-    // networkidle, not just goto()'s default 'load': the product list
-    // loads asynchronously from Supabase after the page itself loads, and
-    // a couple of tests below take an immediate (non-retrying) .count()
-    // snapshot, which races the fetch without this.
     await page.goto('/shop', { waitUntil: 'networkidle' });
   });
 
-  test('loads without error and shows either products or a clear empty state', async ({ page }) => {
-    await page.waitForLoadState('networkidle');
-    const cardCount = await page.locator('.specimen-card').count();
-    if (cardCount === 0) {
+  test('shows category tiles — or a clear empty state if nothing is published anywhere', async ({ page }) => {
+    const tileCount = await page.locator('.shop-category-card').count();
+    if (tileCount === 0) {
       await expect(page.locator('.shop-empty')).toBeVisible();
     } else {
-      await expect(page.locator('.specimen-card').first()).toBeVisible();
+      await expect(page.locator('.shop-category-card').first()).toBeVisible();
+      await expect(page.locator('.shop-category-name').first()).not.toBeEmpty();
     }
   });
 
-  test('never shows draft or hidden test products', async ({ page }) => {
-    // These two slugs only ever exist with status draft/hidden in this
-    // dataset (see supabase/seed-sample-products.sql, which deliberately
-    // does not seed them) — if either ever appears, RLS or the status
-    // filter has regressed.
-    await expect(page.getByText('Unfinished Creature Bust')).toHaveCount(0);
-    await expect(page.getByText('Retired Process Print')).toHaveCount(0);
+  test('shows exactly one tile per category that has publicly visible products — no more, no fewer', async ({ page }) => {
+    const [categories, counts] = await Promise.all([getLiveCategories(), getLiveCategoryCounts()]);
+    for (const { name, slug } of categories) {
+      const tile = page.locator('.shop-category-card', { hasText: name });
+      if (counts.has(slug)) {
+        await expect(tile).toHaveCount(1);
+        await expect(tile.locator('.shop-category-count')).toContainText(String(counts.get(slug)));
+      } else {
+        await expect(tile).toHaveCount(0);
+      }
+    }
   });
 
-  test('every visible card has a valid price and status, and a correct pretty-URL link', async ({ page }) => {
+  test('tile order matches Admin → Categories sort order', async ({ page }) => {
+    const [categories, counts] = await Promise.all([getLiveCategories(), getLiveCategoryCounts()]);
+    const expectedOrder = categories.filter((c) => counts.has(c.slug)).map((c) => c.name);
+    test.skip(expectedOrder.length === 0, 'no populated categories to check ordering against');
+
+    const names = await page.locator('.shop-category-name').allTextContents();
+    expect(names).toEqual(expectedOrder);
+  });
+
+  test('each tile is a real link to its category (direct-linkable, no client-side-only routing)', async ({ page }) => {
+    const firstTile = page.locator('.shop-category-card').first();
+    test.skip((await firstTile.count()) === 0, 'no populated categories currently exist');
+    const href = await firstTile.getAttribute('href');
+    expect(href).toMatch(/^\/shop\?category=[a-z0-9-]+$/);
+  });
+
+  test('never shows the draft/hidden test product names, anywhere a category is browsed', async ({ page }) => {
+    // These two slugs only ever exist with status draft/hidden in this
+    // dataset (see supabase/seed-sample-products.sql) — check the overview
+    // (trivially true, no product names render there) and every currently
+    // populated category page, since that's the only place a leaked draft
+    // could actually surface.
+    await expect(page.getByText('Unfinished Creature Bust')).toHaveCount(0);
+    await expect(page.getByText('Retired Process Print')).toHaveCount(0);
+
+    const counts = await getLiveCategoryCounts();
+    for (const slug of counts.keys()) {
+      await page.goto(`/shop?category=${slug}`, { waitUntil: 'networkidle' });
+      await expect(page.getByText('Unfinished Creature Bust')).toHaveCount(0);
+      await expect(page.getByText('Retired Process Print')).toHaveCount(0);
+    }
+  });
+});
+
+test.describe('Shop category view (/shop?category=...)', () => {
+  test('clicking a tile opens that category and shows only its products', async ({ page }) => {
+    await page.goto('/shop', { waitUntil: 'networkidle' });
+    const firstTile = page.locator('.shop-category-card').first();
+    test.skip((await firstTile.count()) === 0, 'no populated categories currently exist');
+
+    const categoryName = (await firstTile.locator('.shop-category-name').textContent()).trim();
+    const expectedCount = parseInt(await firstTile.locator('.shop-category-count').textContent(), 10);
+
+    await firstTile.click();
+    await expect(page).toHaveURL(/\/shop\?category=/);
+    await page.waitForLoadState('networkidle');
+
+    const cards = page.locator('.specimen-card');
+    await expect(cards).toHaveCount(expectedCount);
+    await expect(page.locator('#shop-status')).toContainText(categoryName.toUpperCase());
+
+    // Back link returns to the overview, and browser back works too.
+    await expect(page.locator('.shop-back-link')).toBeVisible();
+  });
+
+  test('direct link to a populated category works without going through the overview first', async ({ page }) => {
+    const counts = await getLiveCategoryCounts();
+    const [slug] = [...counts.keys()];
+    test.skip(!slug, 'no populated categories currently exist');
+
+    await page.goto(`/shop?category=${slug}`, { waitUntil: 'networkidle' });
+    await expect(page.locator('.shop-category-card')).toHaveCount(0);
+    await expect(page.locator('.specimen-card').first()).toBeVisible();
+    await expect(page.locator('.shop-back-link')).toBeVisible();
+  });
+
+  test('browser back button returns from a category view to the overview', async ({ page }) => {
+    await page.goto('/shop', { waitUntil: 'networkidle' });
+    const firstTile = page.locator('.shop-category-card').first();
+    test.skip((await firstTile.count()) === 0, 'no populated categories currently exist');
+
+    await firstTile.click();
+    await page.waitForLoadState('networkidle');
+    await page.goBack();
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/shop$/);
+    await expect(page.locator('.shop-category-card').first()).toBeVisible();
+  });
+
+  test('an unknown or empty category slug shows a clear not-found state, not a dead/blank page', async ({ page }) => {
+    await page.goto('/shop?category=definitely-does-not-exist-12345', { waitUntil: 'networkidle' });
+    await expect(page.locator('.shop-empty')).toContainText('could not be found');
+  });
+
+  test('every visible product card has a valid price/status and a correct pretty-URL link', async ({ page }) => {
+    const counts = await getLiveCategoryCounts();
+    const [slug] = [...counts.keys()];
+    test.skip(!slug, 'no populated categories currently exist');
+
+    await page.goto(`/shop?category=${slug}`, { waitUntil: 'networkidle' });
     const cards = page.locator('.specimen-card');
     const count = await cards.count();
     for (let i = 0; i < count; i++) {
@@ -68,40 +169,21 @@ test.describe('Shop page', () => {
     }
   });
 
-  test('category filter buttons only show categories with at least one published product (Stage 6.75)', async ({ page }) => {
-    // Categories are managed through /admin → Categories (Stage 6.5) and
-    // can be renamed/added/removed at any time, so this reads the live
-    // list rather than hardcoding names — only "All" (not a DB category,
-    // see components/filterBar.js) is a fixed expectation. An empty
-    // category (no published products) must NOT appear as a filter
-    // button on the public shop — it still shows in the admin Categories
-    // screen, just not here.
-    await expect(page.getByRole('button', { name: 'All', exact: true })).toBeVisible();
-    const [categories, slugsWithProducts] = await Promise.all([getLiveCategories(), getCategorySlugsWithPublishedProducts()]);
-    for (const { name, slug } of categories) {
-      const button = page.getByRole('button', { name, exact: true });
-      if (slugsWithProducts.has(slug)) {
-        await expect(button).toBeVisible();
-      } else {
-        await expect(button).toHaveCount(0);
-      }
-    }
-  });
+  test('a product card inside a category links to a matching, working detail page', async ({ page }) => {
+    const counts = await getLiveCategoryCounts();
+    const [slug] = [...counts.keys()];
+    test.skip(!slug, 'no populated categories currently exist');
 
-  test('card links to a matching, working detail page', async ({ page }) => {
+    await page.goto(`/shop?category=${slug}`, { waitUntil: 'networkidle' });
     const firstCard = page.locator('.specimen-card').first();
-    test.skip((await firstCard.count()) === 0, 'no products currently published — nothing to click');
-
     const name = await firstCard.locator('.specimen-title').textContent();
     const href = await firstCard.locator('.specimen-title a').getAttribute('href');
-    const slug = href.split('/').pop();
+    const productSlug = href.split('/').pop();
 
-    // `npx serve` (used for local/test hosting) doesn't apply the Cloudflare
-    // _redirects rewrite for the pretty /product/:slug path — navigate via
-    // the extensionless query-string form instead, same as every other
-    // product-detail test in this file. The pretty URL itself is covered by
-    // wrangler pages dev and live verification (see docs/SHOP_SETUP.md).
-    await page.goto(`/product?slug=${slug}`, { waitUntil: 'networkidle' });
+    // `npx serve` (local/test hosting) doesn't apply the Cloudflare
+    // _redirects rewrite for the pretty /product/:slug path — use the
+    // extensionless query-string form instead, same as the rest of this file.
+    await page.goto(`/product?slug=${productSlug}`, { waitUntil: 'networkidle' });
     await expect(page.locator('.specimen-name')).toHaveText(name.trim());
     await expect(page.locator('.data-placeholder')).toHaveCount(0);
   });

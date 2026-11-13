@@ -227,6 +227,56 @@ body.page-admin {
 .admin-status-fulfilled { color: var(--text-muted); }
 .admin-status-cancelled { color: var(--accent); border-color: var(--accent); }
 .admin-status-refunded { color: var(--accent); border-color: var(--accent); }
+.admin-status-failed { color: var(--accent); border-color: var(--accent); }
+.admin-status-partially_refunded { color: var(--accent); border-color: var(--accent); }
+.admin-status-unfulfilled { color: var(--accent-tertiary); border-color: var(--accent-tertiary); }
+.admin-status-preparing { color: var(--accent-tertiary); border-color: var(--accent-tertiary); }
+.admin-status-label_not_purchased { color: var(--text-muted); }
+.admin-status-label_created { color: var(--accent-tertiary); border-color: var(--accent-tertiary); }
+.admin-status-shipped { color: var(--accent-secondary); border-color: var(--accent-secondary); }
+.admin-status-in_transit { color: var(--accent-secondary); border-color: var(--accent-secondary); }
+.admin-status-delivered { color: var(--accent-secondary); border-color: var(--accent-secondary); }
+.admin-status-exception { color: var(--accent); border-color: var(--accent); }
+
+.admin-test-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 6px;
+    color: var(--bg-dark);
+    background: var(--accent-tertiary);
+    font-weight: 600;
+}
+
+.admin-test-badge-lg {
+    font-size: 0.7rem;
+    padding: 4px 10px;
+}
+
+.admin-orders-toolbar {
+    margin-bottom: 12px;
+}
+
+.admin-orders-search {
+    width: 100%;
+    max-width: 360px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    font-family: inherit;
+}
+
+.admin-order-events {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
 
 .admin-row-clickable {
     cursor: pointer;

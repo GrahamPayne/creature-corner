@@ -15,8 +15,21 @@ import {
   adminReorderCategories,
   adminDeleteCategory,
   adminListOrders,
+  adminGetOrder,
   uploadProductImage,
 } from '../admin/api.js';
+import {
+  adminCreateTestOrder,
+  adminConfirmTestPayment,
+  adminUpdateFulfillmentStatus,
+  adminUpdateShippingStatus,
+  adminUpdateTrackingInfo,
+  adminUpdateOrderNotes,
+  adminCancelOrder,
+  adminRefundOrder,
+  adminListOrderEvents,
+} from '../admin/ordersApi.js';
+import { createTestOrderForm } from '../admin/testOrderForm.js';
 import {
   adminListGalleryItems,
   adminUpdateGalleryItem,
@@ -410,17 +423,69 @@ async function renderGallerySection(mount) {
 }
 
 async function renderOrdersSection(mount) {
-  mount.innerHTML = '<h1>Orders</h1><div id="orders-mount"></div>';
+  mount.innerHTML = `
+    <div class="admin-header">
+      <h1>Orders</h1>
+      <div class="admin-header-actions">
+        <button type="button" class="admin-btn admin-btn-primary" id="create-test-order-btn">Create Test Order</button>
+      </div>
+    </div>
+    <div id="orders-mount"></div>
+  `;
   const ordersMount = mount.querySelector('#orders-mount');
-  const orders = await adminListOrders();
+  let orders = await adminListOrders();
+
+  async function refreshOrders() {
+    orders = await adminListOrders();
+  }
 
   function showList() {
     ordersMount.replaceChildren(createOrdersTable(orders, { onSelect: (id) => showDetail(id) }));
   }
-  function showDetail(id) {
-    const order = orders.find((o) => o.id === id);
-    ordersMount.replaceChildren(createOrderDetail(order, { onBack: showList }));
+
+  async function showDetail(id) {
+    ordersMount.innerHTML = '<p class="admin-notice">Loading&hellip;</p>';
+    const [order, events] = await Promise.all([
+      orders.find((o) => o.id === id) ? Promise.resolve(orders.find((o) => o.id === id)) : adminGetOrder(id),
+      adminListOrderEvents(id),
+    ]);
+    ordersMount.replaceChildren(
+      createOrderDetail(order, {
+        onBack: showList,
+        onConfirmTestPayment: (orderId) => adminConfirmTestPayment(orderId),
+        onMarkFulfilled: (orderId) => adminUpdateFulfillmentStatus(orderId, 'fulfilled'),
+        onMarkUnfulfilled: (orderId) => adminUpdateFulfillmentStatus(orderId, 'unfulfilled'),
+        onUpdateShippingStatus: (orderId, status) => adminUpdateShippingStatus(orderId, /** @type {any} */ (status)),
+        onUpdateTracking: (orderId, info) => adminUpdateTrackingInfo(orderId, info),
+        onUpdateNotes: (orderId, notes) => adminUpdateOrderNotes(orderId, notes),
+        onCancel: (orderId, reason) => adminCancelOrder(orderId, reason),
+        onRefund: (orderId, amountCents, reason) => adminRefundOrder(orderId, { amountCents, reason }),
+        onReload: async () => {
+          await refreshOrders();
+          showDetail(id);
+        },
+        events,
+      })
+    );
   }
+
+  async function showTestOrderForm() {
+    ordersMount.innerHTML = '<p class="admin-notice">Loading&hellip;</p>';
+    const products = await adminListProducts();
+    ordersMount.replaceChildren(
+      createTestOrderForm({
+        products,
+        onCreate: (fields) => adminCreateTestOrder(fields),
+        onCancel: showList,
+        onDone: async () => {
+          await refreshOrders();
+          showList();
+        },
+      })
+    );
+  }
+
+  mount.querySelector('#create-test-order-btn').addEventListener('click', showTestOrderForm);
   showList();
 }
 

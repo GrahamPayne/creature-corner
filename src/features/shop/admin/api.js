@@ -15,7 +15,7 @@ export { isDuplicateSlugError };
 
 const PRODUCT_SELECT = '*, category:categories(id, slug, name), images:product_images(id, storage_path, sort_order, is_primary)';
 
-async function client() {
+export async function client() {
   const supabase = await getSupabaseClient();
   if (!supabase) throw new Error('Supabase is not configured.');
   return supabase;
@@ -408,20 +408,20 @@ export async function adminDeleteCategory(id) {
   if (error) throw error;
 }
 
-const ORDER_SELECT = `
+export const ORDER_SELECT = `
   *,
   items:order_items(
-    id, product_id, product_name, unit_price_cents, quantity,
+    id, product_id, product_name, product_slug, product_image_url, unit_price_cents, quantity,
     product:products(slug, images:product_images(storage_path, is_primary, sort_order))
   )
 `;
 
-/** "Needs fulfillment" (paid, not yet fulfilled) is intentionally not its own status — it's derived here, not stored, so Stage 7/8 never has to migrate a redundant column. */
+/** "Needs fulfillment" = paid, and not yet fulfilled or cancelled — derived from the new payment_status/fulfillment_status columns (supabase/migrations/005_orders_fulfillment.sql), not stored as its own column. */
 export function deriveNeedsFulfillment(order) {
-  return order.status === 'paid';
+  return order.paymentStatus === 'paid' && order.fulfillmentStatus !== 'fulfilled' && order.fulfillmentStatus !== 'cancelled';
 }
 
-function normalizeOrder(row, supabase) {
+export function normalizeOrder(row, supabase) {
   const items = (row.items || []).map((item) => {
     const images = (item.product?.images || [])
       .slice()
@@ -431,26 +431,52 @@ function normalizeOrder(row, supabase) {
     return {
       id: item.id,
       productId: item.product_id,
-      productSlug: item.product?.slug ?? null,
+      // Prefer the purchase-time snapshot (product_slug/product_image_url,
+      // added by the Orders & Fulfillment migration) — falls back to the
+      // live product join for any order created before that snapshot
+      // existed. The snapshot is what keeps a historical order correct
+      // even after the product is later edited, re-categorized, or deleted.
+      productSlug: item.product_slug ?? item.product?.slug ?? null,
       name: item.product_name,
       unitPriceCents: item.unit_price_cents,
       quantity: item.quantity,
       lineTotalCents: item.unit_price_cents * item.quantity,
-      thumbnailUrl: thumbnail?.url ?? null,
+      thumbnailUrl: item.product_image_url ?? thumbnail?.url ?? null,
     };
   });
 
   return {
     id: row.id,
+    orderNumber: row.order_number,
     email: row.email,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
     status: row.status,
     fulfillmentType: row.fulfillment_type,
     shippingAddress: row.shipping_address,
+    billingAddress: row.billing_address,
+    currency: row.currency,
     subtotalCents: row.subtotal_cents,
     shippingCents: row.shipping_cents,
+    taxCents: row.tax_cents,
+    discountCents: row.discount_cents,
     totalCents: row.total_cents,
+    paymentProvider: row.payment_provider,
+    paymentReference: row.payment_reference,
+    paymentStatus: row.payment_status,
+    fulfillmentStatus: row.fulfillment_status,
+    shippingStatus: row.shipping_status,
+    shippingCarrier: row.shipping_carrier,
+    shippingService: row.shipping_service,
+    trackingNumber: row.tracking_number,
+    labelReference: row.label_reference,
+    notes: row.notes,
+    testMode: row.test_mode,
+    paidAt: row.paid_at,
+    fulfilledAt: row.fulfilled_at,
+    cancelledAt: row.cancelled_at,
+    refundedAt: row.refunded_at,
+    refundedAmountCents: row.refunded_amount_cents,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     items,
@@ -463,4 +489,12 @@ export async function adminListOrders() {
   const { data, error } = await supabase.from('orders').select(ORDER_SELECT).order('created_at', { ascending: false });
   if (error) throw error;
   return data.map((row) => normalizeOrder(row, supabase));
+}
+
+/** @param {string} id @returns {Promise<ReturnType<typeof normalizeOrder>>} */
+export async function adminGetOrder(id) {
+  const supabase = await client();
+  const { data, error } = await supabase.from('orders').select(ORDER_SELECT).eq('id', id).single();
+  if (error) throw error;
+  return normalizeOrder(data, supabase);
 }

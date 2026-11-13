@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Product Form Test Harness</title>
+<link rel="stylesheet" href="/src/features/shop/styles/admin.css">
+<!-- productForm.js's image manager imports uploadProductImage etc. from
+     api.js, which imports supabaseClient.js's bare '@supabase/supabase-js'
+     specifier at module top-level — unlike batchUpload.js, this dependency
+     is real (the image manager genuinely can upload), so it can't be
+     decoupled the way apiErrors.js was. This harness never actually
+     triggers an upload (the fake product below has an empty images array
+     and no image is added during these tests), but the import still has to
+     *resolve* for the module graph to load at all. Mirrors admin.html's
+     importmap. -->
+<script type="importmap">
+{ "imports": { "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.117.2" } }
+</script>
+</head>
+<body class="page-admin">
+<!--
+  Standalone harness for tests/shop/e2e/product-form.spec.js. Loads the
+  real createProductForm() module in Edit-Product mode (a `product` is
+  supplied) with a stubbed onSubmit — no real Supabase write, no admin
+  login — so these tests exercise the actual rendered Edit Product form
+  (the one Admin → Products → Edit uses) in a real browser.
+-->
+<div class="admin-panel" id="root"></div>
+<script type="module">
+  import { createProductForm } from '/src/features/shop/admin/productForm.js';
+
+  window.__events = [];
+
+  const categories = [{ id: 'cat-1', slug: 'lighters', name: 'Lighters' }];
+  const product = {
+    id: 'product-1',
+    name: 'Creature Lighter-001',
+    slug: 'creature-lighter-001',
+    priceCents: 2500,
+    category: { id: 'cat-1', slug: 'lighters', name: 'Lighters' },
+    shortDescription: '',
+    description: '',
+    dimensions: '',
+    materials: '',
+    quantity: 1,
+    shippingClass: 'small',
+    pickupAvailable: false,
+    packedWeightLb: 0,
+    packedWeightOz: 0,
+    packageLengthIn: null,
+    packageWidthIn: null,
+    packageHeightIn: null,
+    featured: false,
+    status: 'available',
+    images: [],
+  };
+
+  const form = createProductForm({
+    categories,
+    product,
+    shippingRates: { small: 500, medium: 800 },
+    onSubmit: async (fields) => {
+      window.__events.push({ type: 'submit', fields });
+      return { ...product, ...fields };
+    },
+    onDone: () => window.__events.push({ type: 'done' }),
+    onCancel: () => window.__events.push({ type: 'cancel' }),
+  });
+
+  document.getElementById('root').appendChild(form);
+  window.__formReady = true;
+</script>
+</body>
+</html>

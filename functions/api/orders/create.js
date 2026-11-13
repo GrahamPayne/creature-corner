@@ -9,9 +9,22 @@
  * server-side, create the order — using the exact same pure modules
  * (order/orderTotals.js, order/orderNumber.js, payments/providerRegistry.js)
  * the admin test-order tool already uses and that are already unit
- * tested. It has not been run: this environment has no Cloudflare
- * dashboard access to set SUPABASE_SERVICE_ROLE_KEY as a Pages secret, and
- * no way to invoke a deployed Function to confirm it actually works.
+ * tested.
+ *
+ * Talks to Supabase via plain fetch() against its REST/RPC API instead of
+ * the @supabase/supabase-js SDK: this project's Cloudflare Pages build
+ * has no configured build command, so node_modules is never installed on
+ * Cloudflare's build machine before the Functions bundler runs — any
+ * npm-resolved import fails there with "Could not resolve" even though it
+ * resolves fine locally (this repo's own node_modules already exists
+ * here). Rather than add a build step this project has deliberately never
+ * had (see CLAUDE.md: "No framework, no bundler, no build step"), this
+ * Function has zero npm dependencies of its own — it only imports plain,
+ * dependency-free local JS modules, which bundle from source with no
+ * installation step needed, the same way every browser-side file in this
+ * repo already does. Supabase's SDK is a thin wrapper over this exact
+ * REST/RPC API; using it directly here isn't a workaround, it's removing
+ * a dependency this one file never needed.
  *
  * Required Cloudflare Pages secrets (not yet configured):
  *   SUPABASE_SERVICE_ROLE_KEY — bypasses RLS; never log it, never echo it
@@ -20,7 +33,6 @@
  * Never trusts the browser for price, availability, or totals — every
  * number here is re-derived server-side from the live `products` table.
  */
-import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL } from '../../../src/features/shop/api/config.js';
 import { computeOrderTotals } from '../../../src/features/shop/order/orderTotals.js';
 import { formatOrderNumber, parseOrderNumber } from '../../../src/features/shop/order/orderNumber.js';
@@ -30,6 +42,62 @@ const PUBLIC_STATUSES = ['available'];
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+/**
+ * Minimal PostgREST client — just the handful of operations this
+ * endpoint needs (select/insert/rpc/public-storage-URL), built on the
+ * Workers-native fetch(), no SDK. Every request carries the service-role
+ * key, which bypasses RLS entirely — this must only ever run server-side.
+ */
+function createSupabaseRest(url, serviceRoleKey) {
+  const base = `${url}/rest/v1`;
+  const authHeaders = { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` };
+
+  async function request(path, init = {}) {
+    const res = await fetch(`${base}${path}`, { ...init, headers: { ...authHeaders, 'Content-Type': 'application/json', ...(init.headers || {}) } });
+    const text = await res.text();
+    const body = text ? JSON.parse(text) : null;
+    if (!res.ok) {
+      const error = Array.isArray(body) ? body[0] : body;
+      return { data: null, error: error || { message: `HTTP ${res.status}` }, count: null };
+    }
+    const contentRange = res.headers.get('content-range');
+    const count = contentRange && contentRange.includes('/') ? Number(contentRange.split('/')[1]) : null;
+    return { data: body, error: null, count };
+  }
+
+  return {
+    /** @param {string} table @param {string} select @param {Record<string,string>} [filters] */
+    async select(table, select, filters = {}) {
+      const params = new URLSearchParams({ select });
+      for (const [key, value] of Object.entries(filters)) params.append(key, value);
+      return request(`/${table}?${params.toString()}`);
+    },
+    /** Count-only lookup (no rows needed) — Prefer: count=exact puts the total in the Content-Range response header. */
+    async count(table, filters = {}) {
+      const params = new URLSearchParams({ select: 'id' });
+      for (const [key, value] of Object.entries(filters)) params.append(key, value);
+      return request(`/${table}?${params.toString()}`, { headers: { Prefer: 'count=exact' } });
+    },
+    /** @param {string} table @param {any} row */
+    async insertOne(table, row) {
+      const { data, error } = await request(`/${table}`, { method: 'POST', body: JSON.stringify(row), headers: { Prefer: 'return=representation' } });
+      return { data: Array.isArray(data) ? data[0] : data, error };
+    },
+    /** @param {string} table @param {any[]} rows */
+    async insertMany(table, rows) {
+      return request(`/${table}`, { method: 'POST', body: JSON.stringify(rows) });
+    },
+    /** @param {string} fn @param {any} args */
+    async rpc(fn, args) {
+      return request(`/rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) });
+    },
+    /** @param {string} bucket @param {string} path */
+    getPublicUrl(bucket, path) {
+      return `${url}/storage/v1/object/public/${bucket}/${path}`;
+    },
+  };
 }
 
 /** @param {{request: Request, env: Record<string,string>}} context */
@@ -53,15 +121,16 @@ export async function onRequestPost({ request, env }) {
   if (!Array.isArray(items) || items.length === 0) return jsonResponse({ error: 'No items in order.' }, 400);
   if (!email || !fulfillmentType) return jsonResponse({ error: 'Missing required fields.' }, 400);
 
-  const supabase = createClient(SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const db = createSupabaseRest(SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
   // Re-fetch every product server-side — the browser's prices/availability
   // are never trusted (section C / Security requirements).
   const productIds = items.map((i) => i.productId);
-  const { data: products, error: productsError } = await supabase
-    .from('products')
-    .select('id, name, slug, price_cents, quantity, status, shipping_class, pickup_available, images:product_images(storage_path, is_primary, sort_order)')
-    .in('id', productIds);
+  const { data: products, error: productsError } = await db.select(
+    'products',
+    'id,name,slug,price_cents,quantity,status,shipping_class,pickup_available,images:product_images(storage_path,is_primary,sort_order)',
+    { id: `in.(${productIds.join(',')})` }
+  );
   if (productsError) return jsonResponse({ error: 'Could not load products.' }, 500);
 
   const orderItemsPayload = [];
@@ -79,7 +148,7 @@ export async function onRequestPost({ request, env }) {
       product_id: product.id,
       product_name: product.name,
       product_slug: product.slug,
-      product_image_url: primary ? supabase.storage.from('product-images').getPublicUrl(primary.storage_path).data.publicUrl : null,
+      product_image_url: primary ? db.getPublicUrl('product-images', primary.storage_path) : null,
       unit_price_cents: product.price_cents,
       quantity,
     });
@@ -97,38 +166,34 @@ export async function onRequestPost({ request, env }) {
   const now = new Date();
   const dateParts = { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1, day: now.getUTCDate() };
   const prefix = formatOrderNumber({ ...dateParts, sequence: 0 }).replace(/-0000$/, '-');
-  const { count: existingCount } = await supabase.from('orders').select('id', { count: 'exact', head: true }).like('order_number', `${prefix}%`);
+  const { count: existingCount } = await db.count('orders', { order_number: `like.${prefix}%` });
   let orderNumber = formatOrderNumber({ ...dateParts, sequence: (existingCount || 0) + 1 });
 
   // Same count-then-retry-on-collision pattern as admin/ordersApi.js's
-  // adminCreateTestOrder — the COUNT above is only an optimistic starting
+  // adminCreateTestOrder — the count above is only an optimistic starting
   // guess under concurrent checkouts; the unique index on order_number
   // plus this retry loop is what's actually race-safe.
   let order;
   for (let attempt = 0; attempt < 10; attempt++) {
-    const { data, error } = await supabase
-      .from('orders')
-      .insert({
-        order_number: orderNumber,
-        email,
-        customer_name: customerName,
-        fulfillment_type: fulfillmentType,
-        shipping_address: fulfillmentType === 'shipping' ? shippingAddress : null,
-        currency: 'usd',
-        subtotal_cents: totals.subtotalCents,
-        shipping_cents: totals.shippingCents,
-        tax_cents: totals.taxCents,
-        discount_cents: totals.discountCents,
-        total_cents: totals.totalCents,
-        payment_provider: paymentProvider,
-        payment_status: 'pending',
-        fulfillment_status: 'unfulfilled',
-        shipping_status: 'label_not_purchased',
-        test_mode: false,
-        status: 'pending',
-      })
-      .select('*')
-      .single();
+    const { data, error } = await db.insertOne('orders', {
+      order_number: orderNumber,
+      email,
+      customer_name: customerName,
+      fulfillment_type: fulfillmentType,
+      shipping_address: fulfillmentType === 'shipping' ? shippingAddress : null,
+      currency: 'usd',
+      subtotal_cents: totals.subtotalCents,
+      shipping_cents: totals.shippingCents,
+      tax_cents: totals.taxCents,
+      discount_cents: totals.discountCents,
+      total_cents: totals.totalCents,
+      payment_provider: paymentProvider,
+      payment_status: 'pending',
+      fulfillment_status: 'unfulfilled',
+      shipping_status: 'label_not_purchased',
+      test_mode: false,
+      status: 'pending',
+    });
 
     if (!error) {
       order = data;
@@ -143,11 +208,11 @@ export async function onRequestPost({ request, env }) {
     return jsonResponse({ error: 'Could not create order.' }, 500);
   }
 
-  const { error: itemsError } = await supabase.from('order_items').insert(orderItemsPayload.map((i) => ({ ...i, order_id: order.id })));
+  const { error: itemsError } = await db.insertMany('order_items', orderItemsPayload.map((i) => ({ ...i, order_id: order.id })));
   if (itemsError) return jsonResponse({ error: 'Could not create order items.' }, 500);
 
   for (const i of items) {
-    const { error } = await supabase.rpc('reserve_inventory', { p_product_id: i.productId, p_quantity: i.quantity, p_order_id: order.id, p_ttl_minutes: 15 });
+    const { error } = await db.rpc('reserve_inventory', { p_product_id: i.productId, p_quantity: i.quantity, p_order_id: order.id, p_ttl_minutes: 15 });
     if (error) return jsonResponse({ error: `Could not reserve inventory: ${error.message}` }, 409);
   }
 

@@ -15,6 +15,7 @@ import {
   adminReorderCategories,
   adminDeleteCategory,
   adminListOrders,
+  uploadProductImage,
 } from '../admin/api.js';
 import {
   adminListGalleryItems,
@@ -30,6 +31,7 @@ import {
   adminSetSectionCover,
 } from '../admin/galleryApi.js';
 import { createProductForm } from '../admin/productForm.js';
+import { createBatchUpload } from '../admin/batchUpload.js';
 import { createProductTable } from '../admin/productTable.js';
 import { createShippingForm } from '../admin/shippingForm.js';
 import { createCategoryManager } from '../admin/categoryManager.js';
@@ -210,6 +212,7 @@ async function renderProductsSection(mount) {
       <h1>Products</h1>
       <div class="admin-header-actions">
         <button type="button" class="admin-btn admin-btn-primary" id="add-product-btn">Add Product</button>
+        <button type="button" class="admin-btn" id="batch-upload-btn">Batch Upload</button>
       </div>
     </div>
     <p id="admin-status" class="admin-notice">Loading products&hellip;</p>
@@ -287,7 +290,23 @@ async function renderProductsSection(mount) {
     );
   }
 
+  function showBatch() {
+    mount.innerHTML = '<div id="batch-mount"></div>';
+    const batchMount = mount.querySelector('#batch-mount');
+    const batch = createBatchUpload({
+      categories,
+      products,
+      shippingRates,
+      onCreateProduct: (fields) => adminCreateProduct(fields),
+      onUploadImage: (productId, file, opts) => uploadProductImage(productId, file, opts),
+      onCancel: () => renderSection('products'),
+      onDone: () => renderSection('products'),
+    });
+    batchMount.appendChild(batch.element);
+  }
+
   mount.querySelector('#add-product-btn').addEventListener('click', () => showForm());
+  mount.querySelector('#batch-upload-btn').addEventListener('click', () => showBatch());
   refreshTable();
 }
 

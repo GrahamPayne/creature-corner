@@ -5,6 +5,12 @@ import { resizeImageForUpload } from './imageProcessing.js';
 import { pickPrimaryImage } from '../primaryImage.js';
 
 const IMAGE_BUCKET = 'product-images';
+const DUPLICATE_SLUG_MESSAGE = 'That slug is already in use — try another.';
+
+/** True if `err` is the friendly error adminCreateProduct/adminUpdateProduct throw for a slug unique-constraint violation (Postgres 23505) — lets callers (e.g. Batch Upload) detect and retry a slug collision without parsing Postgres error codes themselves. */
+export function isDuplicateSlugError(err) {
+  return err instanceof Error && err.message === DUPLICATE_SLUG_MESSAGE;
+}
 
 const PRODUCT_SELECT = '*, category:categories(id, slug, name), images:product_images(id, storage_path, sort_order, is_primary)';
 
@@ -122,7 +128,7 @@ export async function adminCreateProduct(fields) {
   const patch = toDbPatch(fields);
   const { data, error } = await supabase.from('products').insert(patch).select(PRODUCT_SELECT).single();
   if (error) {
-    if (error.code === '23505') throw new Error('That slug is already in use — try another.');
+    if (error.code === '23505') throw new Error(DUPLICATE_SLUG_MESSAGE);
     throw error;
   }
   return normalizeRow(data, supabase);
@@ -137,7 +143,7 @@ export async function adminUpdateProduct(id, patch) {
     .select(PRODUCT_SELECT)
     .single();
   if (error) {
-    if (error.code === '23505') throw new Error('That slug is already in use — try another.');
+    if (error.code === '23505') throw new Error(DUPLICATE_SLUG_MESSAGE);
     throw error;
   }
   return normalizeRow(data, supabase);

@@ -2,13 +2,15 @@ import { slugify } from './slug.js';
 import { escapeHtml } from '../dom.js';
 import { formatCents } from '../money.js';
 import { validateImageFile } from './imageProcessing.js';
-import { isDuplicateSlugError } from './api.js';
+import { isDuplicateSlugError } from './apiErrors.js';
 import { computeReadinessChecks, getReadinessStatus, getBlockingIssues } from './readiness.js';
 import {
   FULFILLMENT_MODES,
   PACKAGE_SIZES,
   fulfillmentNeedsPackageSize,
+  fulfillmentRequiresPackedData,
   resolveFulfillment,
+  validatePackedShipping,
 } from './fulfillment.js';
 import { nextSequenceStart, formatSequenceNumber } from './batchNaming.js';
 import { createBatchRunner } from './batchCreate.js';
@@ -687,10 +689,19 @@ export function createBatchUpload({ categories, products, shippingRates, onCreat
 
     const blockedNames = [];
     for (const item of items) {
+      if (effectiveStatus(item) !== 'available') continue;
       const { blocking } = cardReadiness(item);
-      if (effectiveStatus(item) === 'available' && blocking.length > 0) {
-        blockedNames.push(`${effectiveName(item)} (${blocking.map((b) => b.label).join(', ')})`);
-      }
+      const reasons = blocking.map((b) => b.label);
+      // readiness.js's packed-weight/dimensions checks are warning-severity (a
+      // draft can be missing them) — the same hard "shippable product needs
+      // positive packed data" rule productForm.js enforces on publish lives in
+      // fulfillment.js's validatePackedShipping instead, so it has to be checked
+      // here too, or a batch-published item could skip a check Add Product never lets through.
+      const shape = buildProductShape(item);
+      const mode = effectiveValue(item, 'fulfillmentMode');
+      const packedError = validatePackedShipping(shape, { requirePositive: fulfillmentRequiresPackedData(mode) });
+      if (packedError) reasons.push(packedError);
+      if (reasons.length > 0) blockedNames.push(`${effectiveName(item)} (${reasons.join(', ')})`);
     }
     if (blockedNames.length > 0) {
       el.textContent = `Can't publish yet — fix or switch to Draft: ${blockedNames.join('; ')}.`;
@@ -698,9 +709,6 @@ export function createBatchUpload({ categories, products, shippingRates, onCreat
       return;
     }
     el.hidden = true;
-
-    phase = 'progress';
-    renderProgress();
 
     async function createOne(item) {
       const fields = buildProductShape(item);
@@ -734,6 +742,13 @@ export function createBatchUpload({ categories, products, shippingRates, onCreat
       return item.createdProduct;
     }
 
+    // `runner` must exist *before* phase flips to 'progress' and renderProgress()
+    // runs — renderProgress() ends by calling updateProgressSummary(), which reads
+    // runner.getSummary(). Building the runner first (and rendering only once it's
+    // assigned) is what guarantees that invariant; getting this order backwards is
+    // exactly what shipped as a bug: it threw on `runner.getSummary()` with runner
+    // still null, so run() itself was never reached and the UI froze on "Starting…"
+    // with every item stuck at "Pending" (see tests/shop/e2e/batch-upload.spec.js).
     runner = createBatchRunner({
       items,
       createOne,
@@ -747,12 +762,35 @@ export function createBatchUpload({ categories, products, shippingRates, onCreat
       },
     });
 
+    try {
+      phase = 'progress';
+      renderProgress();
+    } catch (err) {
+      // Defense in depth: if rendering the progress view itself throws for any
+      // reason, fall back to a visible error instead of a silently frozen screen.
+      console.error('Failed to render batch progress view', err);
+      root.innerHTML = `<div class="admin-header"><h1>Batch Upload</h1></div><p class="admin-form-error">Something went wrong starting batch creation: ${escapeHtml(err instanceof Error ? err.message : String(err))}</p><div class="admin-form-actions"><button type="button" class="admin-btn" id="batch-error-back-btn">Back</button></div>`;
+      root.querySelector('#batch-error-back-btn').addEventListener('click', () => {
+        phase = 'editing';
+        renderEditing();
+      });
+      return;
+    }
+
     runProgress(runner.run());
   }
 
   async function runProgress(promise) {
-    await promise;
-    updateProgressSummary();
+    try {
+      await promise;
+    } catch (err) {
+      // createBatchRunner's own per-item try/catch should make this unreachable
+      // in practice, but if run() ever rejects unexpectedly, the finally below
+      // still pulls the summary off "Starting…" instead of leaving it frozen.
+      console.error('Batch run failed unexpectedly', err);
+    } finally {
+      updateProgressSummary();
+    }
   }
 
   function renderProgress() {

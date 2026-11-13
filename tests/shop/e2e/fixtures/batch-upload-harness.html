@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Batch Upload Test Harness</title>
+<link rel="stylesheet" href="/src/features/shop/styles/admin.css">
+<!-- No importmap needed: batchUpload.js only imports pure modules
+     (apiErrors.js, not api.js) — none of them touch supabaseClient.js's
+     bare '@supabase/supabase-js' specifier, so this harness never needs
+     network access to a CDN to load. -->
+</head>
+<body class="page-admin">
+<!--
+  Standalone harness for tests/shop/e2e/batch-upload.spec.js. Loads the real
+  createBatchUpload() module and drives it with injected onCreateProduct/
+  onUploadImage stubs — no Supabase, no admin login, no network — so these
+  tests exercise the actual submission/progress/retry code path (the one that
+  shipped the "frozen on Starting…" regression) in a real browser, without
+  depending on the real, authenticated-only Supabase project admin.spec.js
+  already can't reach from this suite.
+-->
+<div class="admin-panel" id="root"></div>
+<script type="module">
+  import { createBatchUpload } from '/src/features/shop/admin/batchUpload.js';
+
+  const config = window.__TEST_CONFIG__ || {};
+  window.__calls = { creates: [], uploads: [] };
+  window.__events = [];
+
+  let nextId = 1;
+  const uploadAttempts = {};
+
+  const batch = createBatchUpload({
+    categories: [{ id: 'cat-1', slug: 'lighters', name: 'Lighters' }],
+    products: config.existingProducts || [],
+    shippingRates: { small: 500, medium: 800 },
+    onCreateProduct: async (fields) => {
+      window.__calls.creates.push(fields);
+      return { id: `product-${nextId++}`, ...fields };
+    },
+    onUploadImage: async (productId, file, opts) => {
+      uploadAttempts[productId] = (uploadAttempts[productId] || 0) + 1;
+      window.__calls.uploads.push({ productId, opts });
+      if (config.failUploadOnceForProductId && productId === config.failUploadOnceForProductId && uploadAttempts[productId] === 1) {
+        throw new Error('simulated upload failure');
+      }
+      return { id: `image-${productId}` };
+    },
+    onCancel: () => window.__events.push('cancel'),
+    onDone: () => window.__events.push('done'),
+  });
+
+  document.getElementById('root').appendChild(batch.element);
+  window.__batchReady = true;
+</script>
+</body>
+</html>

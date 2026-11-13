@@ -3,14 +3,15 @@ import { slugify } from './slug.js';
 import { uniqueImagePath } from './storagePath.js';
 import { resizeImageForUpload } from './imageProcessing.js';
 import { pickPrimaryImage } from '../primaryImage.js';
+import { DUPLICATE_SLUG_MESSAGE, isDuplicateSlugError } from './apiErrors.js';
 
 const IMAGE_BUCKET = 'product-images';
-const DUPLICATE_SLUG_MESSAGE = 'That slug is already in use — try another.';
 
-/** True if `err` is the friendly error adminCreateProduct/adminUpdateProduct throw for a slug unique-constraint violation (Postgres 23505) — lets callers (e.g. Batch Upload) detect and retry a slug collision without parsing Postgres error codes themselves. */
-export function isDuplicateSlugError(err) {
-  return err instanceof Error && err.message === DUPLICATE_SLUG_MESSAGE;
-}
+// Re-exported for existing/external importers — the implementation lives in
+// apiErrors.js, which has no Supabase import, so Batch Upload can depend on
+// it without pulling supabaseClient.js's browser-only bare specifier into
+// contexts (like its offline test harness) that have no importmap for it.
+export { isDuplicateSlugError };
 
 const PRODUCT_SELECT = '*, category:categories(id, slug, name), images:product_images(id, storage_path, sort_order, is_primary)';
 

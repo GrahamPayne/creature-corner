@@ -189,6 +189,47 @@ test.describe('Shop category view (/shop?category=...)', () => {
   });
 });
 
+test.describe('Product detail main image presentation', () => {
+  test('shows the complete photograph uncropped (object-fit: contain), sized within the reduced bounds', async ({ page }) => {
+    const counts = await getLiveCategoryCounts();
+    const [slug] = [...counts.keys()];
+    test.skip(!slug, 'no populated categories currently exist');
+
+    await page.goto(`/shop?category=${slug}`, { waitUntil: 'networkidle' });
+    const firstCard = page.locator('.specimen-card').first();
+    const href = await firstCard.locator('.specimen-title a').getAttribute('href');
+    const productSlug = href.split('/').pop();
+
+    await page.goto(`/product?slug=${productSlug}`, { waitUntil: 'networkidle' });
+    const img = page.locator('#product-main-image');
+    test.skip((await img.count()) === 0, 'this product has no image to check');
+
+    await page.waitForFunction(() => {
+      const el = document.getElementById('product-main-image');
+      return el && el.complete && el.naturalWidth > 0;
+    });
+
+    // object-fit: contain (not the listing-card cover/crop treatment) is
+    // what actually guarantees nothing gets cropped.
+    const objectFit = await img.evaluate((el) => getComputedStyle(el).objectFit);
+    expect(objectFit).toBe('contain');
+
+    const box = await img.boundingBox();
+    const natural = await img.evaluate((el) => ({ w: el.naturalWidth, h: el.naturalHeight }));
+
+    // contain never crops, but a mismatched container could still visually
+    // squash the image — the rendered box's aspect ratio must match the
+    // source photo's own aspect ratio (small tolerance for subpixel rounding).
+    const renderedRatio = box.width / box.height;
+    const naturalRatio = natural.w / natural.h;
+    expect(Math.abs(renderedRatio - naturalRatio)).toBeLessThan(0.05);
+
+    // ~20-25% smaller than the old fixed 800px-wide box.
+    expect(box.width).toBeLessThanOrEqual(600);
+    expect(box.height).toBeLessThanOrEqual(500);
+  });
+});
+
 test.describe('Product page', () => {
   test('shows a not-found state for an unknown slug', async ({ page }) => {
     await page.goto('/product?slug=definitely-does-not-exist-12345');

@@ -79,14 +79,30 @@
     margin-bottom: 40px;
 }
 
+/* Main product photo: shows the complete photograph, never cropped.
+   .specimen-image (styles.css) normally pairs a fixed aspect-ratio box
+   with object-fit: cover for listing thumbnails, which crops anything
+   that isn't ~4:3 — fine for a small card, wrong for the one full-size
+   photo on the detail page. Here the box sizes to the image's own
+   aspect ratio instead (bounded by max-width/max-height, ~25% smaller
+   than the old fixed 800x600 box), with object-fit: contain as a
+   fallback so portrait, landscape, and square photos all display intact. */
 .product-gallery-main {
-    aspect-ratio: 4/3;
+    aspect-ratio: auto;
+    max-width: 600px;
+    max-height: 500px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .product-gallery-main img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 500px;
+    object-fit: contain;
 }
 
 .product-gallery-thumbs {
@@ -138,6 +154,11 @@
 
 @media (max-width: 768px) {
     .product-gallery-main {
-        aspect-ratio: 1/1;
+        max-width: 100%;
+        max-height: 360px;
+    }
+
+    .product-gallery-main img {
+        max-height: 360px;
     }
 }

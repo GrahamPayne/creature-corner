@@ -5,6 +5,13 @@
 # layer (functions/api/) that was added for the Orders & Fulfillment
 # infrastructure (see docs/ORDERS_FULFILLMENT_ARCHITECTURE.md).
 #
+# `name` is a required top-level field for Wrangler's config validation —
+# its absence is what made Cloudflare reject this file outright during
+# Pages configuration validation, before ever attempting to build
+# anything ("Missing top-level field 'name' in configuration file").
+# Must match the Cloudflare Pages project's actual name.
+name = "creature-corner"
+
 # nodejs_compat is required for @supabase/supabase-js to run in the
 # Workers runtime Pages Functions use — it relies on Node built-ins
 # (crypto, process, etc.) that aren't present by default. Without this

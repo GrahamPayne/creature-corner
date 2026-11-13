@@ -178,25 +178,32 @@ all.
 
 ### The future real checkout function
 
-`functions/api/orders/create.js` is a **scaffold**, written to show the
-real shape (re-fetch authoritative product data, validate, reserve
-inventory via the same RPC, compute totals server-side with the same
-`orderTotals.js` the admin tool uses, insert the order via the
-service-role key) but genuinely untested — this environment has no
-Cloudflare dashboard access to set `SUPABASE_SERVICE_ROLE_KEY` as a Pages
-secret, and no way to invoke a deployed Function to verify it end-to-end.
-It is **not wired to any live page** — `pages/cart.js`'s "Continue to
-Payment" button is completely unchanged, still a placeholder. Treat this
-file as a documented seam, the same honest status
-`docs/SHIPPING_ARCHITECTURE.md` already gives the EasyPost rate-quoting
-plan, not as verified working code.
+A first version of this (`functions/api/orders/create.js` — re-fetch
+authoritative product data, validate, reserve inventory via the same RPC,
+compute totals server-side with the same `orderTotals.js` the admin tool
+uses, insert the order via the service-role key) was written and
+committed, then **pulled from this deploy**: adding the repo's first-ever
+`/functions` directory appears to have broken the Cloudflare Pages build
+for this commit entirely — every static asset this same commit changed
+(not just the Function) stopped updating on production, consistent with
+a failed Functions bundle blocking the whole deployment rather than just
+that one route. The most likely specific cause is that Pages Functions
+need the `nodejs_compat` compatibility flag for `@supabase/supabase-js`
+(it relies on Node built-ins) — not set anywhere in this project. This
+environment has no Cloudflare dashboard access to confirm the build log
+or set that flag, so rather than guess further at Cloudflare-specific
+config and risk leaving the *entire* deployment stuck, the Function was
+removed to let everything else (schema, admin UI, pure logic, tests)
+ship. The file's full content is preserved in git history at commit
+`1cc5ce0` and is straightforward to reintroduce once compatibility is
+sorted out — nothing else in this phase depends on it existing.
 
 ## What's deliberately still inactive
 
 - No live Stripe/PayPal/Square credentials, no real checkout.
 - No live shipping-label purchasing.
 - No real customer email delivery.
-- `functions/api/orders/create.js` exists but isn't reachable from any page.
+- The real checkout Cloudflare Pages Function (see above) isn't in this deploy at all right now — pulled after it appeared to block the whole build; re-add from git history once Functions compatibility is resolved.
 - A scheduled reservation-expiry sweep (Cloudflare Cron Trigger) isn't configured.
 
 ## Manual follow-up required
@@ -211,3 +218,10 @@ plan, not as verified working code.
    `shipping/providers/easypostLabelProvider.js` or `shippoLabelProvider.js`.
 4. Configure a Cloudflare Cron Trigger to call `release_expired_reservations()`
    periodically once real checkout traffic exists.
+5. Before building the real checkout function: check Cloudflare Pages →
+   this project → Settings → Functions for a "Compatibility flags" field
+   and add `nodejs_compat` (needed for `@supabase/supabase-js` in the
+   Workers runtime), or check the Deployments tab's build log for commit
+   `1cc5ce0` to confirm the actual failure. Once Functions work, restore
+   `functions/api/orders/create.js` from that commit (`git show
+   1cc5ce0:functions/api/orders/create.js`).

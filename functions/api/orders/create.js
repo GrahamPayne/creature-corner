@@ -28,6 +28,7 @@ import { formatOrderNumber, parseOrderNumber } from '../../../src/features/shop/
 import { getPaymentProvider } from '../../../src/features/shop/payments/providerRegistry.js';
 import { getShippingQuote } from '../../../src/features/shop/shipping/shippingProvider.js';
 import { determineFulfillmentOptions } from '../../../src/features/shop/cart/shippingRules.js';
+import { assertSandboxMode } from '../../../src/features/shop/payments/providers/stripeProvider.js';
 
 const PUBLIC_STATUSES = ['available'];
 
@@ -100,8 +101,18 @@ export async function onRequestPost({ request, env }) {
 
   const { items, email, customerName, fulfillmentType, shippingAddress } = input || {};
   if (!Array.isArray(items) || items.length === 0) return jsonResponse({ error: 'No items in order.' }, 400);
+  if (items.length > 100 || items.some((i) => !i || typeof i.productId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(i.productId) || !Number.isSafeInteger(i.quantity) || i.quantity < 1) || new Set(items.map((i) => i.productId)).size !== items.length) {
+    return jsonResponse({ error: 'Each product must have a unique ID and a positive whole-number quantity.' }, 400);
+  }
   if (!email || !fulfillmentType) return jsonResponse({ error: 'Missing required fields.' }, 400);
+  if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof customerName !== 'string' || !customerName.trim() || customerName.length > 200) return jsonResponse({ error: 'Enter a valid name and email.' }, 400);
   if (fulfillmentType !== 'shipping' && fulfillmentType !== 'pickup') return jsonResponse({ error: 'Invalid fulfillment type.' }, 400);
+  if (fulfillmentType === 'shipping' && (!shippingAddress || ['line1', 'city', 'state', 'zip'].some((key) => typeof shippingAddress[key] !== 'string' || !shippingAddress[key].trim() || shippingAddress[key].length > 200))) return jsonResponse({ error: 'Enter a complete shipping address.' }, 400);
+  try {
+    assertSandboxMode(env);
+  } catch {
+    return jsonResponse({ error: 'Checkout payment configuration is not ready.' }, 503);
+  }
 
   const db = createSupabaseRest(SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -217,9 +228,23 @@ export async function onRequestPost({ request, env }) {
   const { error: itemsError } = await db.insertMany('order_items', orderItemsPayload.map(({ shippingClass, pickupAvailable, ...i }) => ({ ...i, order_id: order.id })));
   if (itemsError) return jsonResponse({ error: 'Could not create order items.' }, 500);
 
+  const reservedIds = [];
+  async function releaseAttempt() {
+    for (const id of reservedIds) {
+      const { error } = await db.rpc('release_reservation', { p_reservation_id: id });
+      if (error) console.error('Checkout reservation cleanup failed', order.id);
+    }
+  }
+  // Stripe requires at least 30 minutes. The inventory hold includes a
+  // short delivery allowance beyond the session's 31-minute lifetime.
+  const expiresAt = Math.floor(Date.now() / 1000) + 31 * 60;
   for (const i of items) {
-    const { error } = await db.rpc('reserve_inventory', { p_product_id: i.productId, p_quantity: i.quantity, p_order_id: order.id, p_ttl_minutes: 30 });
-    if (error) return jsonResponse({ error: `Could not reserve inventory: ${error.message}` }, 409);
+    const { data: reservation, error } = await db.rpc('reserve_inventory', { p_product_id: i.productId, p_quantity: i.quantity, p_order_id: order.id, p_ttl_minutes: 35 });
+    if (error) {
+      await releaseAttempt();
+      return jsonResponse({ error: 'An item could not be reserved. Refresh your cart and try again.' }, 409);
+    }
+    if (reservation?.id) reservedIds.push(reservation.id);
   }
 
   const origin = new URL(request.url).origin;
@@ -228,6 +253,7 @@ export async function onRequestPost({ request, env }) {
     const session = await provider.createSession(
       {
         id: order.id,
+        expiresAt,
         orderNumber,
         totalCents: totals.totalCents,
         shippingCents: totals.shippingCents,
@@ -249,7 +275,10 @@ export async function onRequestPost({ request, env }) {
       // for the order-confirmation page — a transient failure here would
       // otherwise strand that page even though the order/session are fine.
       ({ error: refError } = await db.update('orders', { payment_reference: session.reference }, { id: `eq.${order.id}` }));
-      if (refError) console.error('Could not persist payment_reference for order', order.id, session.reference, refError);
+      if (refError) {
+        console.error('Could not persist checkout reference', order.id);
+        return jsonResponse({ error: 'Checkout could not be saved. Please try again later.' }, 503);
+      }
     }
 
     return jsonResponse({ orderId: order.id, orderNumber, redirectUrl: session.redirectUrl });

@@ -40,6 +40,7 @@
  * @property {{name: string, unitPriceCents: number, quantity: number, imageUrl?: string}[]} items
  * @property {string} successUrl
  * @property {string} cancelUrl
+ * @property {number} [expiresAt] - payment session expiration, Unix seconds
  *
  * @typedef {Object} PaymentProvider
  * @property {string} name

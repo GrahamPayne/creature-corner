@@ -25,10 +25,13 @@ const STRIPE_API_BASE = 'https://api.stripe.com/v1';
  * mistake, this still blocks it from being used to create a real charge.
  * @param {Record<string,string>} env
  */
-function assertSandboxMode(env) {
+export function assertSandboxMode(env) {
   if (!env?.STRIPE_SECRET_KEY) throw new ProviderNotConfiguredError('Stripe');
   const isSandboxKey = env.STRIPE_SECRET_KEY.startsWith('sk_test_');
   const liveExplicitlyEnabled = env.STRIPE_MODE === 'live';
+  if (liveExplicitlyEnabled && !env.STRIPE_SECRET_KEY.startsWith('sk_live_')) {
+    throw new Error('Live mode requires a matching live Stripe secret key.');
+  }
   if (!isSandboxKey && !liveExplicitlyEnabled) {
     throw new Error(
       'Refusing to use a Stripe key that is not a recognized Sandbox key (sk_test_) while STRIPE_MODE is not explicitly "live". This safety check exists specifically to prevent accidentally activating real payments.'
@@ -54,12 +57,13 @@ function toStripeFormBody(obj) {
   return params;
 }
 
-/** @param {string} path @param {{method?: string, body?: URLSearchParams, secretKey: string}} opts */
-async function stripeRequest(path, { method = 'GET', body, secretKey }) {
+/** @param {string} path @param {{method?: string, body?: URLSearchParams, secretKey: string, idempotencyKey?: string}} opts */
+async function stripeRequest(path, { method = 'GET', body, secretKey, idempotencyKey }) {
   const res = await fetch(`${STRIPE_API_BASE}${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${secretKey}`,
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
     },
     body,
@@ -128,8 +132,10 @@ export const stripeProvider = {
     const data = await stripeRequest('/checkout/sessions', {
       method: 'POST',
       secretKey: env.STRIPE_SECRET_KEY,
+      idempotencyKey: `checkout-${order.id}`,
       body: toStripeFormBody({
         mode: 'payment',
+        expires_at: order.expiresAt,
         customer_email: order.email,
         line_items: lineItems,
         success_url: order.successUrl,
@@ -188,6 +194,7 @@ export const stripeProvider = {
 
   /** @param {string} reference @param {Record<string,string>} env */
   async getTransaction(reference, env) {
+    assertSandboxMode(env);
     const data = await stripeRequest(`/checkout/sessions/${encodeURIComponent(reference)}`, { secretKey: env.STRIPE_SECRET_KEY });
     return { status: data.payment_status, amountCents: data.amount_total, raw: data };
   },

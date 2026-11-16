@@ -78,8 +78,10 @@ test('createSession throws ProviderNotConfiguredError when no secret key is set'
 test('createSession sends the correct line items, totals, and metadata to Stripe (fetch mocked, no real network)', async () => {
   const originalFetch = globalThis.fetch;
   let capturedBody;
+  let capturedHeaders;
   globalThis.fetch = async (url, init) => {
     capturedBody = init.body;
+    capturedHeaders = init.headers;
     return {
       ok: true,
       json: async () => ({ id: 'cs_test_xyz', url: 'https://checkout.stripe.com/pay/cs_test_xyz', client_secret: null }),
@@ -88,6 +90,7 @@ test('createSession sends the correct line items, totals, and metadata to Stripe
   try {
     const order = {
       id: 'order-1',
+      expiresAt: 2000000000,
       orderNumber: 'CC-20261113-0002',
       totalCents: 3300,
       shippingCents: 800,
@@ -106,6 +109,8 @@ test('createSession sends the correct line items, totals, and metadata to Stripe
 
     const params = new URLSearchParams(capturedBody);
     assert.equal(params.get('mode'), 'payment');
+    assert.equal(params.get('expires_at'), '2000000000');
+    assert.equal(capturedHeaders['Idempotency-Key'], 'checkout-order-1');
     assert.equal(params.get('customer_email'), 'customer@example.com');
     assert.equal(params.get('line_items[0][price_data][unit_amount]'), '2500');
     assert.equal(params.get('line_items[0][quantity]'), '1');

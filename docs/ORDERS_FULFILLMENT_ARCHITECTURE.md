@@ -55,12 +55,19 @@ is edited, re-categorized, or deleted.
 New tables: `inventory_reservations` (the overselling guard),
 `order_events` (append-only audit trail), `payment_events` (idempotent
 webhook ledger, `unique(provider, provider_event_id)`). `payment_events`
-is now live: `functions/api/webhooks/stripe.js` inserts into it before
-processing each verified Stripe event — the unique constraint on
-`(provider, provider_event_id)` is the actual idempotency guard (a
-duplicate delivery's insert fails with `23505`, treated as already
-processed). Safe Test Mode still never writes to it — there's no real
-webhook to deduplicate there.
+is now live, via `supabase/migrations/006_atomic_stripe_webhooks.sql`'s
+`process_stripe_event(p_event jsonb)`: a single service-role-only SQL
+function that `functions/api/webhooks/stripe.js` calls via RPC after
+verifying the signature. The insert into `payment_events` (`on conflict
+(provider, provider_event_id) do nothing`), the inventory confirmation,
+and the order status update all happen inside that one function call —
+one Postgres transaction — so a duplicate delivery's insert is a no-op
+and a failure partway through (e.g. an inventory conflict) rolls back
+everything, including the `payment_events` row, leaving the event safe
+for Stripe to retry. The webhook handler itself holds no business logic
+beyond signature/shape verification; see migration 006 for the actual
+rules. Safe Test Mode still never writes to it — there's no real webhook
+to deduplicate there.
 
 New RPC functions: `reserve_inventory`, `confirm_reservation`,
 `release_reservation`, `release_expired_reservations` — see Inventory
@@ -292,9 +299,12 @@ reported:
 
 ## Manual follow-up required
 
-1. Run `supabase/migrations/005_orders_fulfillment.sql` in the Supabase
-   SQL editor (Dashboard → SQL Editor) — nothing here works until this
-   migration is applied.
+1. Run `supabase/migrations/005_orders_fulfillment.sql`, then
+   `supabase/migrations/006_atomic_stripe_webhooks.sql`, in the Supabase
+   SQL editor (Dashboard → SQL Editor), in that order — nothing here
+   works until both are applied. 006 replaces 005's `reserve_inventory`/
+   `confirm_reservation` with lock-order-corrected versions and adds
+   `process_stripe_event()`; it is safe to run even if 005 already ran.
 2. Configure Stripe Sandbox secrets in Cloudflare Pages → this project →
    Settings → Environment variables (Production), as encrypted secrets,
    never committed to the repo: `STRIPE_SECRET_KEY` (Stripe Dashboard →

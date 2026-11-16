@@ -32,3 +32,13 @@ test('missing or mismatched payment configuration cannot create orphan orders', 
   assert.equal((await submit(valid, { STRIPE_SECRET_KEY: 'sk_live_fixture' })).status, 503);
   assert.equal((await submit(valid, { STRIPE_SECRET_KEY: 'sk_test_fixture', STRIPE_MODE: 'live' })).status, 503);
 });
+
+test('a failed products lookup (bad credentials, RLS, schema drift) returns a generic 500 and logs the real error server-side, never to the client', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ message: 'Invalid API key' }, { status: 401 }));
+  const res = await submit(valid, { STRIPE_SECRET_KEY: 'sk_test_fixture' });
+  assert.equal(res.status, 500);
+  assert.doesNotMatch(await res.text(), /Invalid API key/);
+  assert.equal(console.error.mock.calls.length, 1);
+  assert.match(console.error.mock.calls[0].arguments[0], /Could not load products/);
+});

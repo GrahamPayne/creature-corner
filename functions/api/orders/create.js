@@ -124,7 +124,13 @@ export async function onRequestPost({ request, env }) {
     'id,name,slug,price_cents,quantity,status,shipping_class,pickup_available,images:product_images(storage_path,is_primary,sort_order)',
     { id: `in.(${productIds.join(',')})` }
   );
-  if (productsError) return jsonResponse({ error: 'Could not load products.' }, 500);
+  if (productsError) {
+    // Never echo DB errors to the client (Payment Security / section C) —
+    // logged server-side only so a real failure here (bad credentials,
+    // RLS, schema drift) is diagnosable instead of a bare 500.
+    console.error('Could not load products for checkout', productsError);
+    return jsonResponse({ error: 'Could not load products.' }, 500);
+  }
 
   const orderItemsPayload = [];
   for (const requested of items) {

@@ -30,25 +30,57 @@ Root-cause fix that unblocked this: `supabase/migrations/007_service_role_grants
 
 ## Pre-flight (do all of these first)
 
-- [ ] **Decide sales tax.** `create.js` currently hard-codes `taxCents: 0`
-      (`STRIPE_AUTOMATIC_TAX` off). Confirm whether you must collect sales tax
-      for your state(s). If yes: complete a Stripe Tax registration, then set
-      `STRIPE_AUTOMATIC_TAX=true` and remove the hard-coded zero. **Do not sell
-      live with tax silently at $0 if you are obligated to collect it.**
-- [ ] **Review shipping rates.** Flat rates live in the `shipping_classes`
-      table (`flat_price_cents`). The TEST product used `medium` = $40. Verify
-      every class's rate is correct for real orders before selling.
+- [ ] **Decide sales tax — and do NOT just enable Stripe automatic tax.** The
+      checkout computes `taxCents: 0` today, and the webhook reconciles Stripe's
+      `amount_total` against the order's stored `total_cents` to the cent. Setting
+      `STRIPE_AUTOMATIC_TAX=true` makes Stripe add tax on top, so the amounts no
+      longer match and the webhook would **reject every paid order after the
+      customer was charged**. See **Sales tax** below for the correct approach.
+      Whether you must collect tax is a business/legal decision.
+- [ ] **Review shipping rates.** Flat rates in `shipping_classes`: `small` $10,
+      `medium` $40, `large` $80, `pickup_only` $0; `oversized` and `special_quote`
+      have **no flat rate** set (null). Live catalog today: 25 products at `small`
+      ($10) + the `pickup_only` TEST product — all configured. Set an `oversized`
+      rate before assigning any product to it (checkout rejects an unpriced class).
 - [ ] **Audit real products.** For each product confirm `status`,
       `shipping_class`, and `pickup_available` are correct (these drive
       server-side pricing and the pickup/ship fulfillment rules).
 - [ ] **Confirm the business entity / Stripe account** is fully activated for
       live charges (Stripe dashboard → Activate account: bank details, tax ID,
       identity).
-- [ ] **Remove test data.** Cancel/clear the Sandbox test orders
-      (e.g. `CC-20261117-0001` / `-0002`) and reset the TEST product's
-      inventory, or hide the TEST product (`status` ≠ `available`).
+- [ ] **Prepare the TEST product for launch.** Hide it (`status` ≠ `available`)
+      or reset its inventory so it is not publicly purchasable. Historical Sandbox
+      test orders (`CC-20261117-0001/-0002/-0003`) may remain as records; you can
+      cancel the *pending* ones in Admin to release inventory holds, but do not
+      delete order history.
+
+## Sales tax (how to add it correctly, if required)
+
+The checkout computes every total server-side, and the webhook reconciles the
+Stripe charge against the stored order total **to the cent** — it never lets
+Stripe substitute its own numbers. Tax has to fit that model:
+
+- **Default (today): no tax.** `taxCents` is 0 and `automatic_tax` is off. Launch
+  this way only if you have no collection obligation.
+- **To collect tax (correct approach):** keep `automatic_tax` **off** and compute
+  `taxCents` **server-side** in `create.js`. It then flows into `total_cents` *and*
+  the "Sales Tax" Stripe line item the provider already adds when `taxCents > 0`,
+  so `amount_total` still equals `total_cents` and reconciliation passes.
+- **Do NOT set `STRIPE_AUTOMATIC_TAX=true`** with the current code — Stripe would
+  add tax on top of a total computed without it, and the webhook would reject the
+  (already-charged) order. Full Stripe Tax support would also need address
+  collection and a relaxed amount check — a larger change that conflicts with the
+  "never trust the provider's numbers" design.
+
+Deciding whether/where you must collect tax is a business/legal decision. Once
+decided, the server-side `taxCents` implementation is small and testable.
 
 ## The switch (Cloudflare Pages → Settings → Environment variables, Production)
+
+> Current Production secrets (names only): `STRIPE_SECRET_KEY` (Sandbox
+> `sk_test_`), `STRIPE_WEBHOOK_SECRET` (Sandbox), `SUPABASE_SERVICE_ROLE_KEY`.
+> `STRIPE_MODE` is not set, which means Sandbox. Going live replaces the two
+> Stripe values and adds `STRIPE_MODE=live`.
 
 - [ ] Set `STRIPE_SECRET_KEY` to the **live** secret key (`sk_live_…`).
 - [ ] Set `STRIPE_MODE=live` (required — without it the guard rejects the live key).

@@ -23,10 +23,10 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "."
 
-# Without this block, the dashboard's "Observability" toggle alone does not
-# reliably enable Functions invocation logs for a Pages project — it must
-# also be declared here and picked up by a new deploy. head_sampling_rate=1
-# captures every invocation (fine at this traffic volume), not a sample.
-[observability]
-enabled = true
-head_sampling_rate = 1
+# NOTE: a Workers-only `[observability]` block was briefly added here to
+# enable Functions invocation logs, but Cloudflare Pages' config validator
+# rejects it outright ("Configuration file for Pages projects does not
+# support 'observability'") — every deploy since that commit silently
+# failed validation, with production continuing to serve whichever build
+# last passed. Enable Functions logs from the Pages dashboard only
+# (Workers & Pages → this project → Settings → Functions), not here.

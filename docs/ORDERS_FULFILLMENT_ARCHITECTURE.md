@@ -310,6 +310,13 @@ reported:
    never committed to the repo: `STRIPE_SECRET_KEY` (Stripe Dashboard →
    Developers → API keys → Secret key, Sandbox/test mode — starts
    `sk_test_...`) and `STRIPE_WEBHOOK_SECRET` (created in the next step).
+   **Cloudflare Pages snapshots environment variables per-deployment, not
+   live**: editing a Production env var/secret and saving only takes effect
+   on the *next* deployment — the currently-live one keeps running with
+   whatever values it was built with. After changing any secret here
+   (`SUPABASE_SERVICE_ROLE_KEY` included), either trigger a new deployment
+   (push a commit, or use the dashboard's "Retry deployment") or the change
+   is invisible to the live site despite showing saved in Settings.
 3. In the Stripe Dashboard (Sandbox/test mode), create a webhook
    destination pointing at `https://creaturecorner.art/api/webhooks/stripe`,
    subscribed to: `checkout.session.completed`,

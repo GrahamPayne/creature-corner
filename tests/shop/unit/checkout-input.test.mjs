@@ -43,6 +43,37 @@ test('a failed products lookup (bad credentials, RLS, schema drift) returns a ge
   assert.match(console.error.mock.calls[0].arguments[0], /Could not load products/);
 });
 
+function base64url(obj) {
+  return Buffer.from(JSON.stringify(obj)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function fakeJwt(payload) {
+  return `${base64url({ alg: 'HS256' })}.${base64url(payload)}.fake-signature-never-verified`;
+}
+
+test('the service-role JWT claims diagnostic reports only booleans, server-side, never in the HTTP response', async (t) => {
+  const calls = [];
+  t.mock.method(console, 'error', (...args) => calls.push(args));
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ message: 'Invalid API key' }, { status: 401 }));
+
+  // Wrong project, wrong role, expired — every boolean should read false.
+  const badKey = fakeJwt({ ref: 'some-other-project', role: 'anon', exp: 1 });
+  const res1 = await submit(valid, { SUPABASE_SERVICE_ROLE_KEY: badKey, STRIPE_SECRET_KEY: 'sk_test_fixture' });
+  const diag1 = calls[0][2];
+  assert.deepEqual(diag1, { projectMatches: false, roleMatches: false, notExpired: false });
+  assert.doesNotMatch(await res1.text(), /some-other-project|anon/);
+
+  // Correct project, correct role, far-future expiry — every boolean true.
+  const goodKey = fakeJwt({ ref: 'qpnqrtcsxtcszmessbvx', role: 'service_role', exp: 9999999999 });
+  const res2 = await submit(valid, { SUPABASE_SERVICE_ROLE_KEY: goodKey, STRIPE_SECRET_KEY: 'sk_test_fixture' });
+  const diag2 = calls[1][2];
+  assert.deepEqual(diag2, { projectMatches: true, roleMatches: true, notExpired: true });
+  assert.doesNotMatch(await res2.text(), /qpnqrtcsxtcszmessbvx|service_role/);
+
+  // A new-format (non-JWT) key never crashes the diagnostic.
+  await submit(valid, { SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_notajwt', STRIPE_SECRET_KEY: 'sk_test_fixture' });
+  assert.deepEqual(calls[2][2], { keyShape: 'not-a-3-part-jwt' });
+});
+
 const PRODUCT_ROW = {
   id: valid.items[0].productId,
   name: 'TEST', slug: 'test', price_cents: 100, quantity: 3, status: 'available',

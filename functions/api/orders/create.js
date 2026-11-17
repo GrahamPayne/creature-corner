@@ -36,36 +36,6 @@ function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-/**
- * TEMPORARY, for diagnosing a live "Could not load products" incident —
- * remove once resolved. Console-only (never in any HTTP response):
- * decodes (never verifies — the signature is never checked, this is not
- * authentication) a legacy Supabase JWT's `ref`/`role` claims and reports
- * only whether they match this project/service_role, as booleans. JWT
- * payloads are signed, not encrypted, so reading claims here exposes
- * nothing the token doesn't already expose to its holder; this still
- * logs only the comparison result, never the claims or the key itself.
- * @param {Record<string,string>} env
- */
-function diagnoseServiceRoleKeyClaims(env) {
-  try {
-    const key = env.SUPABASE_SERVICE_ROLE_KEY;
-    const expectedRef = new URL(SUPABASE_URL).hostname.split('.')[0];
-    if (typeof key !== 'string') return { keyType: typeof key };
-    const parts = key.split('.');
-    if (parts.length !== 3) return { keyShape: 'not-a-3-part-jwt' };
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    const nowSeconds = Math.floor(Date.now() / 1000);
-    return {
-      projectMatches: payload.ref === expectedRef,
-      roleMatches: payload.role === 'service_role',
-      notExpired: typeof payload.exp !== 'number' || payload.exp > nowSeconds,
-    };
-  } catch {
-    return { keyShape: 'decode-failed' };
-  }
-}
-
 /** Minimal PostgREST client — see admin/ordersApi.js's docs for why this exists instead of the SDK. */
 function createSupabaseRest(url, serviceRoleKey) {
   const base = `${url}/rest/v1`;
@@ -158,7 +128,7 @@ export async function onRequestPost({ request, env }) {
     // Never echo DB errors to the client (Payment Security / section C) —
     // logged server-side only so a real failure here (bad credentials,
     // RLS, schema drift) is diagnosable instead of a bare 500.
-    console.error('Could not load products for checkout', productsError, diagnoseServiceRoleKeyClaims(env));
+    console.error('Could not load products for checkout', productsError);
     return jsonResponse({ error: 'Could not load products.' }, 500);
   }
 
